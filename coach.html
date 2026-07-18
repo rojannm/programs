@@ -9,6 +9,7 @@
   --bg:#ffffff; --bg2:#f7f7f5; --card:#ffffff;
   --ink:#1c1c1e; --ink2:#6d6d72; --hair:#e5e5ea;
   --accent:#d99a06; --accent-soft:#fdf3d7;
+  --coach:#0a63c2; --coach-soft:#e8f2fd;
   --good:#177537; --danger:#c0392b;
   --shadow:0 1px 2px rgba(0,0,0,.05);
 }
@@ -17,6 +18,7 @@
     --bg:#1c1c1e; --bg2:#141415; --card:#242426;
     --ink:#f2f2f4; --ink2:#98989e; --hair:#39393d;
     --accent:#e6b345; --accent-soft:#3a3110;
+    --coach:#8ec8ff; --coach-soft:#16324c;
     --good:#8fdda4; --danger:#ff7a6b; --shadow:none;
   }
 }
@@ -24,110 +26,136 @@
   --bg:#ffffff; --bg2:#f7f7f5; --card:#ffffff;
   --ink:#1c1c1e; --ink2:#6d6d72; --hair:#e5e5ea;
   --accent:#d99a06; --accent-soft:#fdf3d7;
+  --coach:#0a63c2; --coach-soft:#e8f2fd;
   --good:#177537; --danger:#c0392b; --shadow:0 1px 2px rgba(0,0,0,.05);
 }
 :root[data-theme="dark"]{
   --bg:#1c1c1e; --bg2:#141415; --card:#242426;
   --ink:#f2f2f4; --ink2:#98989e; --hair:#39393d;
   --accent:#e6b345; --accent-soft:#3a3110;
+  --coach:#8ec8ff; --coach-soft:#16324c;
   --good:#8fdda4; --danger:#ff7a6b; --shadow:none;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
-body{
-  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  background:var(--bg2); color:var(--ink); line-height:1.45;
-}
-.wrap{max-width:760px;margin:0 auto;padding:20px 16px 96px}
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  background:var(--bg2);color:var(--ink);line-height:1.45}
+.wrap{max-width:820px;margin:0 auto;padding:20px 16px 96px}
 h1{font-size:1.6rem;font-weight:800;letter-spacing:-.02em;margin:18px 0 4px}
 .sub{color:var(--ink2);font-size:.95rem;margin:0 0 18px}
-.card{
-  background:var(--card);border:1px solid var(--hair);border-radius:14px;
-  margin-bottom:14px;box-shadow:var(--shadow);padding:16px;
-}
+.card{background:var(--card);border:1px solid var(--hair);border-radius:14px;
+  margin-bottom:14px;box-shadow:var(--shadow);padding:16px}
 .card h2{font-size:1.05rem;font-weight:700;margin:0 0 10px}
 label{display:block;font-size:.82rem;font-weight:600;color:var(--ink2);margin:10px 0 4px}
-input[type=text],input[type=password]{
+input[type=text],input[type=password],textarea,select{
   width:100%;font:inherit;font-size:.92rem;color:var(--ink);background:var(--bg);
-  border:1px solid var(--hair);border-radius:9px;padding:9px 11px;
-}
-.btn{
-  font:inherit;font-size:.9rem;font-weight:600;
-  border:1px solid var(--hair);background:var(--card);color:var(--accent);
-  border-radius:999px;padding:8px 16px;cursor:pointer;box-shadow:var(--shadow);
-  margin:10px 8px 0 0;
-}
+  border:1px solid var(--hair);border-radius:9px;padding:9px 11px}
+textarea{min-height:120px;resize:vertical}
+.btn{font:inherit;font-size:.9rem;font-weight:600;border:1px solid var(--hair);background:var(--card);
+  color:var(--accent);border-radius:999px;padding:8px 16px;cursor:pointer;box-shadow:var(--shadow);margin:10px 8px 0 0}
 .btn.quiet{color:var(--ink2);font-weight:500}
+.btn.danger{color:var(--danger)}
+.btn.small{font-size:.78rem;padding:4px 12px;margin:4px 6px 0 0}
 .btn:active{transform:scale(.97)}
-.btn:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 #status{font-size:.85rem;color:var(--ink2);margin-top:10px;min-height:1.2em}
 #status.ok{color:var(--good)}
 #status.err{color:var(--danger)}
-.clientbtn{
-  display:inline-block;font:inherit;font-size:.9rem;font-weight:600;color:var(--ink);
-  background:var(--bg2);border:1px solid var(--hair);border-radius:999px;
-  padding:7px 15px;margin:4px 6px 4px 0;cursor:pointer;
-}
+.clientbtn{display:inline-block;font:inherit;font-size:.9rem;font-weight:600;color:var(--ink);
+  background:var(--bg2);border:1px solid var(--hair);border-radius:999px;padding:7px 15px;margin:4px 6px 4px 0;cursor:pointer}
 .clientbtn.on{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+.clientbtn.revoked{opacity:.55}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--hair);margin:8px 0 14px;flex-wrap:wrap}
+.tab{font:inherit;font-size:.9rem;font-weight:600;color:var(--ink2);background:none;border:0;
+  border-bottom:2.5px solid transparent;padding:8px 14px;cursor:pointer}
+.tab.on{color:var(--accent);border-bottom-color:var(--accent)}
+.cycle{border:1px solid var(--hair);border-radius:12px;padding:12px;margin:12px 0;background:var(--bg)}
+.cycle.archived{opacity:.65}
+.cyhead{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.cyhead input[type=text]{flex:1;min-width:160px}
+.dayblock{border:1px solid var(--hair);border-radius:10px;margin:10px 0;padding:10px;background:var(--card)}
+.dayhead{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+.dayhead input[type=text]{flex:1;min-width:110px}
+.dayhead select{width:auto}
+.exlist{min-height:14px;border-radius:8px}
+.exlist.dragover{outline:2px dashed var(--accent);outline-offset:2px}
+.excard{display:flex;gap:8px;align-items:flex-start;border:1px solid var(--hair);border-radius:9px;
+  padding:8px;margin:7px 0;background:var(--bg)}
+.excard.dragging{opacity:.4}
+.grip{cursor:grab;color:var(--ink2);font-size:1.05rem;line-height:1.2;padding:6px 4px;user-select:none;-webkit-user-select:none}
+.exmain{flex:1;min-width:0}
+.exrow1{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.exrow1 input[type=text]{flex:1;min-width:150px}
+.exmeta{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;font-size:.8rem;color:var(--ink2);align-items:center}
+.exmeta label{display:inline-flex;gap:4px;align-items:center;margin:0;font-weight:500}
+.exmeta input[type=checkbox]{accent-color:var(--accent)}
+.exmeta input[type=text]{width:auto;flex:1;min-width:110px;font-size:.8rem;padding:5px 8px}
+.mini{font-size:.78rem;color:var(--ink2)}
+.dayhdr{font-size:.78rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--ink2);margin:18px 0 4px;border-bottom:1px solid var(--hair);padding-bottom:4px}
 .exblock{margin:14px 0}
 .exblock h3{font-size:.95rem;font-weight:700;margin:0 0 6px}
 .exblock .meta{color:var(--ink2);font-weight:500;font-size:.8rem;margin-left:6px}
 .tblwrap{overflow-x:auto;border:1px solid var(--hair);border-radius:10px}
 table{border-collapse:collapse;width:100%;min-width:340px;font-size:.88rem;font-variant-numeric:tabular-nums}
 th{text-align:left;font-weight:700;font-size:.8rem;padding:7px 10px;border-bottom:1px solid var(--hair);background:var(--bg2)}
-td{padding:7px 10px;border-bottom:1px solid var(--hair);vertical-align:top}
+td{padding:7px 10px;border-bottom:1px solid var(--hair);vertical-align:top;min-width:60px}
 tr:last-child td{border-bottom:0}
-.dayhdr{
-  font-size:.78rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
-  color:var(--ink2);margin:18px 0 4px;border-bottom:1px solid var(--hair);padding-bottom:4px;
-}
+td[contenteditable]:empty::before{content:"—";color:var(--hair)}
+td[contenteditable]:focus{background:var(--accent-soft);outline:none}
+tr.coachrow td{background:var(--coach-soft)}
 .note{font-size:.85rem;color:var(--ink2)}
-pre{
-  background:var(--bg2);border:1px solid var(--hair);border-radius:10px;
-  padding:12px;font-size:.8rem;overflow-x:auto;white-space:pre-wrap;word-break:break-all;
-}
+pre{background:var(--bg2);border:1px solid var(--hair);border-radius:10px;padding:12px;
+  font-size:.8rem;overflow-x:auto;white-space:pre-wrap;word-break:break-all}
+.addrow{font:inherit;font-size:.85rem;font-weight:600;color:var(--accent);background:none;border:0;cursor:pointer;padding:6px 2px}
+#toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(80px);
+  background:var(--ink);color:var(--bg);padding:10px 20px;border-radius:999px;font-size:.9rem;
+  font-weight:600;opacity:0;transition:all .25s ease;pointer-events:none;z-index:50;white-space:nowrap}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>Coach tools</h1>
-  <p class="sub">Private page for Rojan. Not linked from anywhere. Settings stay in this browser only.</p>
+  <p class="sub">Private page for Rojan. Program changes you make here go live for the client the next time their page loads.</p>
 
   <div class="card">
     <h2>Connection</h2>
     <label for="sburl">Supabase project URL</label>
-    <input type="text" id="sburl" placeholder="https://xxxx.supabase.co" autocomplete="off">
+    <input type="text" id="sburl" autocomplete="off">
     <label for="sbkey">Anon public key</label>
-    <input type="password" id="sbkey" placeholder="paste the anon public key" autocomplete="off">
+    <input type="password" id="sbkey" autocomplete="off">
     <label for="coachtok">Coach token</label>
-    <input type="password" id="coachtok" placeholder="the coach token from the SQL setup" autocomplete="off">
+    <input type="password" id="coachtok" autocomplete="off" placeholder="paste your coach token">
     <button class="btn" id="saveConn" type="button">Save and connect</button>
+    <button class="btn quiet" id="exportBtn" type="button">Export backup</button>
+    <button class="btn quiet" id="importBtn" type="button">Import backup</button>
+    <input type="file" id="importFile" accept="application/json" style="display:none">
     <p id="status"></p>
   </div>
 
   <div class="card">
     <h2>Clients</h2>
-    <div id="clients"><p class="note">Connect first to load clients.</p></div>
-    <div id="entries"></div>
+    <div id="clients"><p class="note">Connect first.</p></div>
+    <button class="btn" id="newClientBtn" type="button" style="display:none">+ New client</button>
+    <div id="newClientOut"></div>
   </div>
 
-  <div class="card">
-    <h2>Backup</h2>
-    <p class="note">Export downloads every client's log rows as one JSON file. Import restores rows from that file, overwriting matching rows. Do this weekly.</p>
-    <button class="btn" id="exportBtn" type="button">Export all data</button>
-    <button class="btn quiet" id="importBtn" type="button">Import from backup</button>
-    <input type="file" id="importFile" accept="application/json" style="display:none">
-  </div>
-
-  <div class="card">
-    <h2>New client page</h2>
-    <p class="note">Builds a blank copy of the program page for a new client and downloads it, with a fresh secret token. It cannot deploy itself. After downloading, send the file to Claude with the client's program and it gets filled, added to the site repo, and pushed live.</p>
-    <label for="newname">Client display name (what they see, e.g. "Sarah K")</label>
-    <input type="text" id="newname" autocomplete="off">
-    <button class="btn" id="tplBtn" type="button">Create blank client page</button>
-    <div id="tplOut"></div>
+  <div class="card" id="clientCard" style="display:none">
+    <h2 id="clientTitle"></h2>
+    <div class="tabs">
+      <button class="tab on" data-tab="program" type="button">Program</button>
+      <button class="tab" data-tab="logs" type="button">Logs</button>
+      <button class="tab" data-tab="private" type="button">Private</button>
+      <button class="tab" data-tab="access" type="button">Access</button>
+    </div>
+    <div id="tab-program"></div>
+    <div id="tab-logs" style="display:none"></div>
+    <div id="tab-private" style="display:none"></div>
+    <div id="tab-access" style="display:none"></div>
   </div>
 </div>
+<div id="toast" role="status" aria-live="polite">Saved</div>
 
 <script>
 (function(){
@@ -135,222 +163,628 @@ pre{
 var SETTINGS_KEY="coach-tools-settings";
 var settings={};
 try{ settings=JSON.parse(localStorage.getItem(SETTINGS_KEY))||{}; }catch(e){}
-
 var $=function(id){return document.getElementById(id);};
 $("sburl").value=settings.url||"https://pvacnkjhszhqqclyyaya.supabase.co";
 $("sbkey").value=settings.key||"sb_publishable_ZSC_0xYgARiTNfGKNOeWUA_YK6yOLP6";
 $("coachtok").value=settings.tok||"";
 
-function setStatus(msg, cls){ var s=$("status"); s.textContent=msg; s.className=cls||""; }
-function headers(){
-  return { "apikey":settings.key, "Authorization":"Bearer "+settings.key,
-           "x-client-token":settings.tok, "Content-Type":"application/json" };
+var toastTimer=null;
+function toast(msg){
+  var t=$("toast"); t.textContent=msg; t.classList.add("show");
+  clearTimeout(toastTimer); toastTimer=setTimeout(function(){t.classList.remove("show");},1400);
 }
-function url(path){ return settings.url.replace(/\/$/,"")+path; }
-
-async function fetchAllRows(){
-  var out=[], from=0, page=1000;
-  while(true){
-    var r=await fetch(url("/rest/v1/log_entries?select=*&order=client_slug.asc,exercise_id.asc,row_index.asc&limit="+page+"&offset="+from),
-      {headers:headers()});
-    if(!r.ok) throw new Error("fetch failed "+r.status);
-    var batch=await r.json();
-    out=out.concat(batch);
-    if(batch.length<page) break;
-    from+=page;
-  }
+function setStatus(msg,cls){ var s=$("status"); s.textContent=msg; s.className=cls||""; }
+function headers(extra){
+  var h={"apikey":settings.key,"Authorization":"Bearer "+settings.key,
+         "x-client-token":settings.tok,"Content-Type":"application/json"};
+  for(var k in (extra||{})) h[k]=extra[k];
+  return h;
+}
+function url(p){ return settings.url.replace(/\/$/,"")+p; }
+function el(tag,cls,text){
+  var n=document.createElement(tag);
+  if(cls)n.className=cls;
+  if(text!==undefined)n.textContent=text;
+  return n;
+}
+function esc(s){ return encodeURIComponent(s); }
+function randToken(n){
+  var chars="abcdefghjkmnpqrstuvwxyz23456789",out="";
+  var buf=new Uint8Array(n||14); crypto.getRandomValues(buf);
+  for(var i=0;i<buf.length;i++)out+=chars[buf[i]%chars.length];
   return out;
 }
-
-var allRows=[];
-function renderClients(){
-  var host=$("clients");
-  host.textContent="";
-  var slugs=[];
-  allRows.forEach(function(r){ if(slugs.indexOf(r.client_slug)<0) slugs.push(r.client_slug); });
-  if(!slugs.length){ host.innerHTML='<p class="note">No entries yet. Clients appear here after their first logged edit.</p>'; return; }
-  slugs.forEach(function(s){
-    var b=document.createElement("button");
-    b.type="button"; b.className="clientbtn"; b.textContent=s;
-    b.addEventListener("click", function(){
-      host.querySelectorAll(".clientbtn").forEach(function(x){x.classList.remove("on");});
-      b.classList.add("on");
-      renderEntries(s);
-    });
-    host.appendChild(b);
-  });
-}
-function fmtWhen(ts){
-  if(!ts) return "";
-  var d=new Date(ts);
-  return (d.getMonth()+1)+"/"+d.getDate()+" "+d.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});
-}
-function renderEntries(slug){
-  var host=$("entries");
-  host.textContent="";
-  var rows=allRows.filter(function(r){return r.client_slug===slug;});
-  var byEx={};
-  rows.forEach(function(r){ (byEx[r.exercise_id]=byEx[r.exercise_id]||[]).push(r); });
-  var notes=byEx["_notes"];
-  delete byEx["_notes"];
-  var byDay={};
-  Object.keys(byEx).forEach(function(exId){
-    var day=(exId.split("-")[0]||"?").toUpperCase();
-    (byDay[day]=byDay[day]||[]).push(exId);
-  });
-  Object.keys(byDay).sort().forEach(function(day){
-    var hdr=document.createElement("p");
-    hdr.className="dayhdr"; hdr.textContent="Day "+day;
-    host.appendChild(hdr);
-    byDay[day].sort().forEach(function(exId){
-      var entries=byEx[exId];
-      var meta=null, dataRows=[];
-      entries.forEach(function(e){
-        var parsed=null; try{ parsed=JSON.parse(e.notes); }catch(err){}
-        if(e.row_index===-1){ meta=parsed; return; }
-        dataRows[e.row_index]={cells:(parsed&&parsed.c)?parsed.c:[e.date||"",e.weight||"",e.set||"",e.reps||""], when:e.updated_at};
-      });
-      dataRows=dataRows.filter(function(x){return x!==undefined;});
-      var block=document.createElement("div");
-      block.className="exblock";
-      var h=document.createElement("h3");
-      h.textContent=(meta&&meta.name)?meta.name:exId;
-      var latest=dataRows.reduce(function(m,x){return (x.when&&(!m||x.when>m))?x.when:m;},null);
-      var mspan=document.createElement("span");
-      mspan.className="meta"; mspan.textContent=latest?("updated "+fmtWhen(latest)):"";
-      h.appendChild(mspan);
-      block.appendChild(h);
-      var cols=(meta&&meta.cols)?meta.cols:["Date","Weight","Set","Reps"];
-      var wrapd=document.createElement("div"); wrapd.className="tblwrap";
-      var t=document.createElement("table");
-      var thead=document.createElement("thead"), htr=document.createElement("tr");
-      cols.forEach(function(c){ var th=document.createElement("th"); th.textContent=c; htr.appendChild(th); });
-      thead.appendChild(htr); t.appendChild(thead);
-      var tb=document.createElement("tbody");
-      dataRows.forEach(function(x){
-        var tr=document.createElement("tr");
-        for(var i=0;i<cols.length;i++){
-          var td=document.createElement("td");
-          td.textContent=(x.cells[i]||"");
-          tr.appendChild(td);
-        }
-        tb.appendChild(tr);
-      });
-      t.appendChild(tb); wrapd.appendChild(t); block.appendChild(wrapd);
-      host.appendChild(block);
-    });
-  });
-  if(notes && notes[0] && notes[0].notes){
-    var hdr2=document.createElement("p");
-    hdr2.className="dayhdr"; hdr2.textContent="Notes for Rojan";
-    host.appendChild(hdr2);
-    var p=document.createElement("p");
-    p.textContent=notes[0].notes;
-    host.appendChild(p);
-  }
+function slugify(name){ return name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,""); }
+function todayMD(){ var d=new Date(); return (d.getMonth()+1)+"/"+d.getDate(); }
+function download(filename,text){
+  var blob=new Blob([text],{type:"application/json"});
+  var a=document.createElement("a");
+  a.href=URL.createObjectURL(blob); a.download=filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},500);
 }
 
+/* ---------- state ---------- */
+var clientsList=[];   /* [{client_slug}] from client_programs */
+var tokensList=[];    /* [{client_slug, token}] */
+var currentSlug=null;
+var prog=null;        /* parsed program of current client */
+var progTimer=null;
+var logModel={};      /* exId -> [{cells, by}] */
+
+/* ---------- connect ---------- */
 async function connect(){
-  settings={url:$("sburl").value.trim(), key:$("sbkey").value.trim(), tok:$("coachtok").value.trim()};
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  settings={url:$("sburl").value.trim(),key:$("sbkey").value.trim(),tok:$("coachtok").value.trim()};
+  localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));
   if(!settings.url||!settings.key||!settings.tok){ setStatus("Fill in all three fields.","err"); return; }
   setStatus("Connecting…");
   try{
-    allRows=await fetchAllRows();
-    setStatus("Connected. "+allRows.length+" rows loaded.","ok");
+    var r=await fetch(url("/rest/v1/client_programs?select=client_slug&order=client_slug.asc"),{headers:headers()});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    clientsList=await r.json();
+    var t=await fetch(url("/rest/v1/client_tokens?select=client_slug,token"),{headers:headers()});
+    tokensList=t.ok?await t.json():[];
+    setStatus("Connected. "+clientsList.length+" clients.","ok");
     renderClients();
-  }catch(e){
-    setStatus("Could not connect. Check the URL, key, and coach token. "+e.message,"err");
+    $("newClientBtn").style.display="";
+    var pre=new URLSearchParams(location.search).get("c");
+    if(pre&&clientsList.some(function(c){return c.client_slug===pre;})) selectClient(pre);
+  }catch(e){ setStatus("Could not connect. Check the three fields. "+e.message,"err"); }
+}
+$("saveConn").addEventListener("click",connect);
+
+function tokenFor(slug){
+  var t=tokensList.find(function(x){return x.client_slug===slug;});
+  return t?t.token:null;
+}
+function renderClients(){
+  var host=$("clients"); host.textContent="";
+  if(!clientsList.length){ host.appendChild(el("p","note","No clients yet. Use + New client.")); return; }
+  clientsList.forEach(function(c){
+    var b=el("button","clientbtn"+(tokenFor(c.client_slug)?"":" revoked")+(c.client_slug===currentSlug?" on":""),
+      c.client_slug+(tokenFor(c.client_slug)?"":" (revoked)"));
+    b.type="button";
+    b.addEventListener("click",function(){ selectClient(c.client_slug); });
+    host.appendChild(b);
+  });
+}
+
+/* ---------- select client / tabs ---------- */
+async function selectClient(slug){
+  currentSlug=slug;
+  renderClients();
+  $("clientCard").style.display="";
+  $("clientTitle").textContent=slug;
+  showTab("program");
+  await loadProgram();
+  renderProgramEditor();
+}
+document.querySelectorAll(".tab").forEach(function(t){
+  t.addEventListener("click",function(){ showTab(t.dataset.tab); });
+});
+function showTab(name){
+  document.querySelectorAll(".tab").forEach(function(t){ t.classList.toggle("on",t.dataset.tab===name); });
+  ["program","logs","private","access"].forEach(function(n){
+    $("tab-"+n).style.display=(n===name)?"":"none";
+  });
+  if(name==="logs")loadLogs();
+  if(name==="private")loadPrivate();
+  if(name==="access")renderAccess();
+}
+
+/* ---------- program editor ---------- */
+async function loadProgram(){
+  var r=await fetch(url("/rest/v1/client_programs?client_slug=eq."+esc(currentSlug)+"&select=data"),{headers:headers()});
+  var arr=r.ok?await r.json():[];
+  prog=arr.length?JSON.parse(arr[0].data):{name:currentSlug,subtitle:"",warmups:[],cycles:[]};
+}
+function saveProgramSoon(){
+  clearTimeout(progTimer);
+  progTimer=setTimeout(saveProgram,1200);
+}
+async function saveProgram(){
+  try{
+    var r=await fetch(url("/rest/v1/client_programs?on_conflict=client_slug"),{
+      method:"POST",headers:headers({"Prefer":"resolution=merge-duplicates,return=minimal"}),
+      body:JSON.stringify([{client_slug:currentSlug,data:JSON.stringify(prog),updated_at:new Date().toISOString()}])});
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    toast("Program saved");
+  }catch(e){ toast("Save failed, check connection"); }
+}
+function newExId(dayId){
+  return (dayId||"x").toLowerCase()+"-"+randToken(6);
+}
+function textInput(value,placeholder,onchange){
+  var i=document.createElement("input");
+  i.type="text"; i.value=value||""; i.placeholder=placeholder||"";
+  i.addEventListener("input",function(){ onchange(i.value); saveProgramSoon(); });
+  return i;
+}
+function check(labelText,val,onchange){
+  var l=el("label"); var c=document.createElement("input");
+  c.type="checkbox"; c.checked=!!val;
+  c.addEventListener("change",function(){ onchange(c.checked); saveProgramSoon(); });
+  l.appendChild(c); l.appendChild(document.createTextNode(labelText));
+  return l;
+}
+var dragSrc=null;
+function renderProgramEditor(){
+  var host=$("tab-program"); host.textContent="";
+  if(!prog){ host.appendChild(el("p","note","Loading…")); return; }
+
+  var idrow=el("div");
+  var nameL=el("label",null,"Client display name"); idrow.appendChild(nameL);
+  idrow.appendChild(textInput(prog.name,"e.g. Jennifer C",function(v){prog.name=v;}));
+  var subL=el("label",null,"Subtitle line"); idrow.appendChild(subL);
+  idrow.appendChild(textInput(prog.subtitle,"e.g. Self days and PT with Rojan",function(v){prog.subtitle=v;}));
+  host.appendChild(idrow);
+
+  var wcard=el("div","cycle");
+  wcard.appendChild(el("strong",null,"Warm-ups"));
+  (prog.warmups=prog.warmups||[]).forEach(function(w,i){
+    var row=el("div","exrow1");
+    row.style.marginTop="6px";
+    row.appendChild(textInput(w.name,"name",function(v){w.name=v;}));
+    var dose=textInput(w.dose,"dose e.g. 2x10",function(v){w.dose=v;});
+    dose.style.maxWidth="130px"; row.appendChild(dose);
+    var u=textInput(w.url||"","video URL (optional)",function(v){w.url=v||null;});
+    u.style.maxWidth="180px"; row.appendChild(u);
+    var del=el("button","btn small danger","✕"); del.type="button";
+    del.addEventListener("click",function(){ prog.warmups.splice(i,1); saveProgramSoon(); renderProgramEditor(); });
+    row.appendChild(del);
+    wcard.appendChild(row);
+  });
+  var addW=el("button","btn small","+ Warm-up"); addW.type="button";
+  addW.addEventListener("click",function(){ prog.warmups.push({name:"",dose:"",url:null}); renderProgramEditor(); });
+  wcard.appendChild(addW);
+  host.appendChild(wcard);
+
+  var addCyRow=el("div");
+  var addCy=el("button","btn","+ New program cycle"); addCy.type="button";
+  addCy.addEventListener("click",function(){
+    var label=prompt("Name for the new cycle (e.g. Programming Oct 2026):");
+    if(!label)return;
+    prog.cycles=prog.cycles||[];
+    prog.cycles.unshift({id:"cy"+randToken(6),label:label,archived:false,
+      days:[{id:"A",type:"pt",title:"Day A",tag:"PT with Rojan",exercises:[]},
+            {id:"B",type:"self",title:"Day B",tag:"On your own",exercises:[]}]});
+    saveProgramSoon(); renderProgramEditor();
+  });
+  addCyRow.appendChild(addCy);
+  host.appendChild(addCyRow);
+
+  (prog.cycles=prog.cycles||[]).forEach(function(cy,cyi){
+    var c=el("div","cycle"+(cy.archived?" archived":""));
+    var head=el("div","cyhead");
+    head.appendChild(textInput(cy.label,"cycle name",function(v){cy.label=v;}));
+    head.appendChild(check("archived",cy.archived,function(v){cy.archived=v; renderProgramEditor();}));
+    var dup=el("button","btn small","Duplicate as new cycle"); dup.type="button";
+    dup.addEventListener("click",function(){
+      var label=prompt("Name for the new cycle:", "Copy of "+(cy.label||""));
+      if(!label)return;
+      var copy=JSON.parse(JSON.stringify(cy));
+      copy.id="cy"+randToken(6); copy.label=label; copy.archived=false;
+      copy.days.forEach(function(d){ d.exercises.forEach(function(ex){ ex.id=newExId(d.id); ex.hl=false; }); });
+      prog.cycles.unshift(copy);
+      saveProgramSoon(); renderProgramEditor();
+      toast("New cycle created. Its logs start fresh.");
+    });
+    head.appendChild(dup);
+    var delCy=el("button","btn small danger","Delete cycle"); delCy.type="button";
+    delCy.addEventListener("click",function(){
+      if(!confirm("Delete cycle \""+(cy.label||"")+"\" from the program? Logged history stays in the database but stops being visible. Usually archive instead."))return;
+      prog.cycles.splice(cyi,1); saveProgramSoon(); renderProgramEditor();
+    });
+    head.appendChild(delCy);
+    c.appendChild(head);
+
+    cy.days=cy.days||[];
+    cy.days.forEach(function(day,di){
+      var d=el("div","dayblock");
+      var dh=el("div","dayhead");
+      dh.appendChild(textInput(day.title,"Day title",function(v){day.title=v;}));
+      dh.appendChild(textInput(day.tag,"tag e.g. PT with Rojan",function(v){day.tag=v;}));
+      var sel=document.createElement("select");
+      [["pt","PT day (blue)"],["self","Self day (pink)"]].forEach(function(o){
+        var op=document.createElement("option"); op.value=o[0]; op.textContent=o[1];
+        if(day.type===o[0])op.selected=true; sel.appendChild(op);
+      });
+      sel.style.width="auto";
+      sel.addEventListener("change",function(){ day.type=sel.value; saveProgramSoon(); });
+      dh.appendChild(sel);
+      var delD=el("button","btn small danger","✕ day"); delD.type="button";
+      delD.addEventListener("click",function(){
+        if(!confirm("Remove "+(day.title||"this day")+" and its exercises from the program?"))return;
+        cy.days.splice(di,1); saveProgramSoon(); renderProgramEditor();
+      });
+      dh.appendChild(delD);
+      d.appendChild(dh);
+      var noteI=textInput(day.note||"","day note (optional)",function(v){day.note=v;});
+      d.appendChild(noteI);
+
+      var list=el("div","exlist");
+      list.dataset.cyi=cyi; list.dataset.di=di;
+      list.addEventListener("dragover",function(e){ e.preventDefault(); list.classList.add("dragover"); });
+      list.addEventListener("dragleave",function(){ list.classList.remove("dragover"); });
+      list.addEventListener("drop",function(e){
+        e.preventDefault(); list.classList.remove("dragover");
+        if(!dragSrc)return;
+        var ex=prog.cycles[dragSrc.cyi].days[dragSrc.di].exercises.splice(dragSrc.exi,1)[0];
+        ex.hl=true;
+        day.exercises.push(ex);
+        dragSrc=null;
+        saveProgramSoon(); renderProgramEditor();
+        toast("Moved. History goes with it.");
+      });
+      day.exercises=day.exercises||[];
+      day.exercises.forEach(function(ex,exi){
+        var card=el("div","excard");
+        card.draggable=true;
+        card.addEventListener("dragstart",function(e){
+          dragSrc={cyi:cyi,di:di,exi:exi};
+          card.classList.add("dragging");
+          e.dataTransfer.effectAllowed="move";
+        });
+        card.addEventListener("dragend",function(){ card.classList.remove("dragging"); });
+        card.appendChild(el("span","grip","⠿"));
+        var main=el("div","exmain");
+        var r1=el("div","exrow1");
+        r1.appendChild(textInput(ex.name,"exercise name",function(v){ex.name=v; ex.hl=true;}));
+        var mv=document.createElement("select");
+        var op0=document.createElement("option"); op0.textContent="Move to…"; op0.value=""; mv.appendChild(op0);
+        prog.cycles.forEach(function(cy2,c2){
+          cy2.days.forEach(function(d2,dd2){
+            if(c2===cyi&&dd2===di)return;
+            var op=document.createElement("option");
+            op.value=c2+":"+dd2;
+            op.textContent=(cy2.label||"cycle")+" / "+(d2.title||d2.id);
+            mv.appendChild(op);
+          });
+        });
+        mv.style.width="auto";
+        mv.addEventListener("change",function(){
+          if(!mv.value)return;
+          var parts=mv.value.split(":");
+          var ex2=day.exercises.splice(exi,1)[0];
+          ex2.hl=true;
+          prog.cycles[parts[0]].days[parts[1]].exercises.push(ex2);
+          saveProgramSoon(); renderProgramEditor();
+          toast("Moved. History goes with it.");
+        });
+        r1.appendChild(mv);
+        var delE=el("button","btn small danger","✕"); delE.type="button";
+        delE.addEventListener("click",function(){
+          if(!confirm("Remove \""+ex.name+"\" from the program? Its logged history stays in the database."))return;
+          day.exercises.splice(exi,1); saveProgramSoon(); renderProgramEditor();
+        });
+        r1.appendChild(delE);
+        main.appendChild(r1);
+        var meta=el("div","exmeta");
+        meta.appendChild(check("demo tag",ex.demo,function(v){ex.demo=v;}));
+        meta.appendChild(check("show \"from Rojan\"",ex.hl,function(v){ex.hl=v;}));
+        var noteI2=textInput(ex.note||"","coach note shown to client",function(v){ex.note=v; ex.hl=true;});
+        meta.appendChild(noteI2);
+        var labelI=textInput(ex.label||"","table label e.g. Bar",function(v){ex.label=v;});
+        labelI.style.maxWidth="110px";
+        meta.appendChild(labelI);
+        var colsI=textInput((ex.cols||["Date","Weight","Set","Reps"]).join(", "),"columns",function(v){
+          ex.cols=v.split(",").map(function(x){return x.trim();}).filter(Boolean);
+        });
+        colsI.style.maxWidth="220px";
+        meta.appendChild(colsI);
+        main.appendChild(meta);
+        card.appendChild(main);
+        list.appendChild(card);
+      });
+      d.appendChild(list);
+      var addE=el("button","btn small","+ Exercise"); addE.type="button";
+      addE.addEventListener("click",function(){
+        day.exercises.push({id:newExId(day.id),name:"New exercise",
+          cols:["Date","Weight","Set","Reps"],hl:true});
+        saveProgramSoon(); renderProgramEditor();
+      });
+      d.appendChild(addE);
+      c.appendChild(d);
+    });
+    var addD=el("button","btn small","+ Day"); addD.type="button";
+    addD.addEventListener("click",function(){
+      var nid=String.fromCharCode(65+cy.days.length);
+      cy.days.push({id:nid,type:"self",title:"Day "+nid,tag:"On your own",exercises:[]});
+      saveProgramSoon(); renderProgramEditor();
+    });
+    c.appendChild(addD);
+    host.appendChild(c);
+  });
+  var saveNow=el("button","btn","Save now"); saveNow.type="button";
+  saveNow.addEventListener("click",function(){ clearTimeout(progTimer); saveProgram(); });
+  host.appendChild(saveNow);
+  host.appendChild(el("p","note","Changes autosave a second after you stop typing. Anything you add, move, or rename gets a blue \"from Rojan\" tag on the client's page. Untick it once they've seen it if you like."));
+}
+
+/* ---------- logs tab ---------- */
+function exById(){
+  var map={};
+  (prog.cycles||[]).forEach(function(cy){
+    (cy.days||[]).forEach(function(day){
+      (day.exercises||[]).forEach(function(ex){ map[ex.id]={ex:ex,cy:cy,day:day}; });
+    });
+  });
+  return map;
+}
+async function loadLogs(){
+  var host=$("tab-logs"); host.textContent="Loading…";
+  var r=await fetch(url("/rest/v1/log_entries?client_slug=eq."+esc(currentSlug)+
+    "&select=*&order=exercise_id.asc,row_index.asc"),{headers:headers()});
+  if(!r.ok){ host.textContent="Could not load logs."; return; }
+  var data=await r.json();
+  logModel={};
+  var notesText="";
+  data.forEach(function(e){
+    if(e.exercise_id==="_notes"){ notesText=e.notes||""; return; }
+    if(e.row_index<0) return;
+    var parsed=null; try{ parsed=JSON.parse(e.notes); }catch(err){}
+    (logModel[e.exercise_id]=logModel[e.exercise_id]||[])[e.row_index]=
+      {cells:(parsed&&parsed.c)?parsed.c:[e.date||"",e.weight||"",e.set||"",e.reps||""],
+       by:(parsed&&parsed.by)||null, when:e.updated_at};
+  });
+  Object.keys(logModel).forEach(function(k){
+    logModel[k]=logModel[k].filter(function(x){return x!==undefined;});
+  });
+  host.textContent="";
+  var map=exById();
+  (prog.cycles||[]).forEach(function(cy){
+    (cy.days||[]).forEach(function(day){
+      var dayShown=false;
+      (day.exercises||[]).forEach(function(ex){
+        var rows=logModel[ex.id]||[];
+        if(!dayShown){
+          host.appendChild(el("p","dayhdr",(cy.label||"")+" · "+(day.title||day.id)));
+          dayShown=true;
+        }
+        host.appendChild(renderLogBlock(ex,rows));
+      });
+    });
+  });
+  var orphans=Object.keys(logModel).filter(function(id){return !map[id];});
+  if(orphans.length){
+    host.appendChild(el("p","dayhdr","Removed from program (history kept)"));
+    orphans.forEach(function(id){
+      host.appendChild(renderLogBlock({id:id,name:id,cols:["Date","Weight","Set","Reps"]},logModel[id]));
+    });
+  }
+  if(notesText){
+    host.appendChild(el("p","dayhdr","Client notes for you"));
+    host.appendChild(el("p",null,notesText));
   }
 }
-$("saveConn").addEventListener("click", connect);
-
-function download(filename, text, type){
-  var blob=new Blob([text],{type:type||"application/json"});
-  var a=document.createElement("a");
-  a.href=URL.createObjectURL(blob);
-  a.download=filename;
-  document.body.appendChild(a); a.click();
-  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },500);
+function renderLogBlock(ex,rows){
+  var block=el("div","exblock");
+  var h=el("h3",null,ex.name);
+  var latest=rows.reduce(function(m,x){return (x.when&&(!m||x.when>m))?x.when:m;},null);
+  if(latest){
+    var d=new Date(latest);
+    h.appendChild(el("span","meta","updated "+(d.getMonth()+1)+"/"+d.getDate()));
+  }
+  block.appendChild(h);
+  var cols=ex.cols||["Date","Weight","Set","Reps"];
+  var wrap=el("div","tblwrap"), t=el("table");
+  var thead=el("thead"), htr=el("tr");
+  cols.forEach(function(c){ htr.appendChild(el("th",null,c)); });
+  thead.appendChild(htr); t.appendChild(thead);
+  var tb=el("tbody");
+  rows.forEach(function(row,ri){
+    var tr=el("tr");
+    if(row.by==="coach")tr.classList.add("coachrow");
+    for(var ci=0;ci<cols.length;ci++){
+      (function(ri,ci){
+        var td=el("td"); td.textContent=(row.cells[ci]||"");
+        try{ td.contentEditable="plaintext-only"; }catch(e){ td.contentEditable="true"; }
+        td.addEventListener("input",function(){
+          row.cells[ci]=td.textContent;
+          row.by="coach"; tr.classList.add("coachrow");
+          pushCoachRows(ex,rows);
+        });
+        tr.appendChild(td);
+      })(ri,ci);
+    }
+    tb.appendChild(tr);
+  });
+  t.appendChild(tb); wrap.appendChild(t); block.appendChild(wrap);
+  var add=el("button","addrow","+ Add entry as coach"); add.type="button";
+  add.addEventListener("click",function(){
+    var cells=cols.map(function(){return "";});
+    var di=cols.indexOf("Date"); if(di>=0)cells[di]=todayMD();
+    rows.push({cells:cells,by:"coach"});
+    logModel[ex.id]=rows;
+    pushCoachRows(ex,rows);
+    block.replaceWith(renderLogBlock(ex,rows));
+  });
+  block.appendChild(add);
+  return block;
+}
+var coachPushTimers={};
+function pushCoachRows(ex,rows){
+  clearTimeout(coachPushTimers[ex.id]);
+  coachPushTimers[ex.id]=setTimeout(async function(){
+    try{
+      var cols=ex.cols||["Date","Weight","Set","Reps"];
+      var entries=rows.map(function(row,i){
+        function std(name){ var ix=cols.indexOf(name); return ix>=0?(row.cells[ix]||null):null; }
+        var body={c:row.cells}; if(row.by)body.by=row.by;
+        return {client_slug:currentSlug,exercise_id:ex.id,row_index:i,
+          date:std("Date"),weight:std("Weight"),set:std("Set"),reps:std("Reps"),
+          notes:JSON.stringify(body),updated_at:new Date().toISOString()};
+      });
+      if(entries.length){
+        var r=await fetch(url("/rest/v1/log_entries?on_conflict=client_slug,exercise_id,row_index"),{
+          method:"POST",headers:headers({"Prefer":"resolution=merge-duplicates,return=minimal"}),
+          body:JSON.stringify(entries)});
+        if(!r.ok)throw new Error("HTTP "+r.status);
+      }
+      toast("Log saved");
+    }catch(e){ toast("Save failed"); }
+  },900);
 }
 
-$("exportBtn").addEventListener("click", async function(){
+/* ---------- private tab ---------- */
+var privTimer=null;
+async function loadPrivate(){
+  var host=$("tab-private"); host.textContent="";
+  host.appendChild(el("p","note","Only you can see this. Client tokens are blocked from this table entirely. Medical history, injuries, goals, payment notes, anything."));
+  var ta=document.createElement("textarea");
+  ta.placeholder="Private notes about this client…";
+  host.appendChild(ta);
+  var r=await fetch(url("/rest/v1/client_private?client_slug=eq."+esc(currentSlug)+"&select=notes"),{headers:headers()});
+  var arr=r.ok?await r.json():[];
+  ta.value=arr.length?arr[0].notes:"";
+  ta.addEventListener("input",function(){
+    clearTimeout(privTimer);
+    privTimer=setTimeout(async function(){
+      try{
+        var r2=await fetch(url("/rest/v1/client_private?on_conflict=client_slug"),{
+          method:"POST",headers:headers({"Prefer":"resolution=merge-duplicates,return=minimal"}),
+          body:JSON.stringify([{client_slug:currentSlug,notes:ta.value,updated_at:new Date().toISOString()}])});
+        if(!r2.ok)throw new Error();
+        toast("Private notes saved");
+      }catch(e){ toast("Save failed"); }
+    },900);
+  });
+}
+
+/* ---------- access tab ---------- */
+function siteBase(){
+  return location.origin+location.pathname.replace(/coach\.html.*$/,"");
+}
+function renderAccess(){
+  var host=$("tab-access"); host.textContent="";
+  var tok=tokenFor(currentSlug);
+  if(tok){
+    host.appendChild(el("p","note","This client's link is active."));
+    var pre=el("pre",null,siteBase()+"client.html?c="+currentSlug+"&k="+tok);
+    host.appendChild(pre);
+    var copy=el("button","btn","Copy link"); copy.type="button";
+    copy.addEventListener("click",function(){
+      navigator.clipboard.writeText(pre.textContent).then(function(){toast("Link copied");});
+    });
+    host.appendChild(copy);
+    var rot=el("button","btn quiet","New link (old one stops working)"); rot.type="button";
+    rot.addEventListener("click",async function(){
+      if(!confirm("Give this client a fresh link and kill the old one?"))return;
+      await revokeToken(currentSlug);
+      await issueToken(currentSlug);
+      renderAccess(); renderClients();
+      toast("New link ready");
+    });
+    host.appendChild(rot);
+    var rev=el("button","btn danger","Revoke access"); rev.type="button";
+    rev.addEventListener("click",async function(){
+      if(!confirm("Revoke "+currentSlug+"'s access? Their link stops working immediately. All their history stays here for you."))return;
+      await revokeToken(currentSlug);
+      renderAccess(); renderClients();
+      toast("Access revoked");
+    });
+    host.appendChild(rev);
+  }else{
+    host.appendChild(el("p","note","Access is revoked. All records are kept. Issue a new link to restore access."));
+    var iss=el("button","btn","Issue new link"); iss.type="button";
+    iss.addEventListener("click",async function(){
+      await issueToken(currentSlug);
+      renderAccess(); renderClients();
+      toast("New link ready");
+    });
+    host.appendChild(iss);
+  }
+}
+async function revokeToken(slug){
+  await fetch(url("/rest/v1/client_tokens?client_slug=eq."+esc(slug)),{method:"DELETE",headers:headers()});
+  tokensList=tokensList.filter(function(t){return t.client_slug!==slug;});
+}
+async function issueToken(slug){
+  var tok=randToken(14);
+  await fetch(url("/rest/v1/client_tokens"),{method:"POST",
+    headers:headers({"Prefer":"return=minimal"}),
+    body:JSON.stringify([{client_slug:slug,token:tok}])});
+  tokensList.push({client_slug:slug,token:tok});
+}
+
+/* ---------- new client ---------- */
+$("newClientBtn").addEventListener("click",async function(){
+  var name=prompt("Client display name (what they see, e.g. Sarah K):");
+  if(!name||!name.trim())return;
+  var slug=slugify(name);
+  if(clientsList.some(function(c){return c.client_slug===slug;})){
+    setStatus("A client with that name already exists.","err"); return;
+  }
+  var blank={name:name.trim(),subtitle:"Training program with Rojan",
+    warmups:[],cycles:[{id:"cy"+randToken(6),label:"Programming",archived:false,
+      days:[{id:"A",type:"pt",title:"Day A",tag:"PT with Rojan",exercises:[]},
+            {id:"B",type:"self",title:"Day B",tag:"On your own",exercises:[]}]}]};
   try{
-    var rows=await fetchAllRows();
-    var d=new Date();
-    var stamp=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
-    download("client-logs-backup-"+stamp+".json", JSON.stringify({exported:d.toISOString(), rows:rows}, null, 1));
-    setStatus("Backup downloaded: "+rows.length+" rows.","ok");
-  }catch(e){ setStatus("Export failed. Connect first. "+e.message,"err"); }
+    var r=await fetch(url("/rest/v1/client_programs"),{method:"POST",
+      headers:headers({"Prefer":"return=minimal"}),
+      body:JSON.stringify([{client_slug:slug,data:JSON.stringify(blank),updated_at:new Date().toISOString()}])});
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    await issueToken(slug);
+    clientsList.push({client_slug:slug});
+    clientsList.sort(function(a,b){return a.client_slug<b.client_slug?-1:1;});
+    renderClients();
+    var out=$("newClientOut"); out.textContent="";
+    out.appendChild(el("p","note","Created. Their link (build their program in the Program tab before sending):"));
+    out.appendChild(el("pre",null,siteBase()+"client.html?c="+slug+"&k="+tokenFor(slug)));
+    selectClient(slug);
+  }catch(e){ setStatus("Could not create client. "+e.message,"err"); }
 });
 
-$("importBtn").addEventListener("click", function(){ $("importFile").click(); });
-$("importFile").addEventListener("change", function(){
-  var f=this.files[0]; if(!f) return;
+/* ---------- backup ---------- */
+$("exportBtn").addEventListener("click",async function(){
+  try{
+    async function all(table){
+      var r=await fetch(url("/rest/v1/"+table+"?select=*"),{headers:headers()});
+      if(!r.ok)throw new Error(table+" "+r.status);
+      return await r.json();
+    }
+    var payload={exported:new Date().toISOString(),
+      log_entries:await all("log_entries"),
+      client_programs:await all("client_programs"),
+      client_private:await all("client_private"),
+      client_tokens:await all("client_tokens")};
+    var d=new Date();
+    var stamp=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+    download("coach-backup-"+stamp+".json",JSON.stringify(payload,null,1));
+    setStatus("Backup downloaded.","ok");
+  }catch(e){ setStatus("Export failed. Connect first. "+e.message,"err"); }
+});
+$("importBtn").addEventListener("click",function(){ $("importFile").click(); });
+$("importFile").addEventListener("change",function(){
+  var f=this.files[0]; if(!f)return;
   var reader=new FileReader();
   reader.onload=async function(){
     try{
       var data=JSON.parse(reader.result);
-      var rows=data.rows||data;
-      if(!Array.isArray(rows)) throw new Error("Not a backup file");
-      if(!confirm("Restore "+rows.length+" rows from this backup? Matching rows on the server get overwritten.")) return;
-      rows.forEach(function(r){ delete r.id; });
-      for(var i=0;i<rows.length;i+=500){
-        var batch=rows.slice(i,i+500);
-        var r=await fetch(url("/rest/v1/log_entries?on_conflict=client_slug,exercise_id,row_index"),{
-          method:"POST",
-          headers:Object.assign(headers(),{"Prefer":"resolution=merge-duplicates,return=minimal"}),
-          body:JSON.stringify(batch)
-        });
-        if(!r.ok) throw new Error("restore failed "+r.status);
+      if(!confirm("Restore from this backup? Matching rows get overwritten."))return;
+      async function put(table,rows,conflict){
+        if(!rows||!rows.length)return;
+        rows.forEach(function(r){delete r.id;});
+        for(var i=0;i<rows.length;i+=500){
+          var r=await fetch(url("/rest/v1/"+table+"?on_conflict="+conflict),{
+            method:"POST",headers:headers({"Prefer":"resolution=merge-duplicates,return=minimal"}),
+            body:JSON.stringify(rows.slice(i,i+500))});
+          if(!r.ok)throw new Error(table+" "+r.status);
+        }
       }
-      setStatus("Restored "+rows.length+" rows.","ok");
+      await put("client_programs",data.client_programs,"client_slug");
+      await put("client_private",data.client_private,"client_slug");
+      await put("client_tokens",data.client_tokens,"client_slug");
+      await put("log_entries",data.log_entries,"client_slug,exercise_id,row_index");
+      setStatus("Backup restored.","ok");
+      connect();
     }catch(e){ setStatus("Import failed. "+e.message,"err"); }
   };
   reader.readAsText(f);
   this.value="";
 });
 
-/* ---------- new client template ---------- */
-function slugify(name){
-  return name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
-}
-function randToken(){
-  var chars="abcdefghjkmnpqrstuvwxyz23456789", out="";
-  var buf=new Uint8Array(14);
-  crypto.getRandomValues(buf);
-  for(var i=0;i<buf.length;i++){ out+=chars[buf[i]%chars.length]; }
-  return out;
-}
-var BLANK_DATA = '{\n warmups: [\n  {name:"Example warm up", dose:"2x10", url:null}\n ],\n days: [\n {id:"A", type:"pt", title:"Day A", tag:"PT with Rojan", exercises:[\n  {id:"a-example", name:"Example exercise", cols:C4, rows:[]}\n ]},\n {id:"B", type:"self", title:"Day B", tag:"On your own", exercises:[\n  {id:"b-example", name:"Example exercise", cols:C4, rows:[]}\n ]}\n]}';
-
-$("tplBtn").addEventListener("click", async function(){
-  var name=$("newname").value.trim();
-  if(!name){ setStatus("Type the client's display name first.","err"); return; }
-  var slug=slugify(name);
-  var token=randToken();
-  var filename=slug+"-"+randToken().slice(0,8)+".html";
-  try{
-    var r=await fetch("jennifer-c-3mfwm6fy.html");
-    if(!r.ok) throw new Error("could not read template ("+r.status+"). This button needs the page to be served from the website, not opened as a file.");
-    var src=await r.text();
-    var cfg='{\n  supabaseUrl: "",\n  supabaseAnonKey: "",\n  slug: "'+slug+'",\n  clientName: "'+name.replace(/"/g,"")+'",\n  subtitle: "Training program with Rojan",\n  programLabel: "Programming"\n}';
-    src=src.replace(/\/\*__CONFIG_START__\*\/[\s\S]*?\/\*__CONFIG_END__\*\//, "/*__CONFIG_START__*/"+cfg+"/*__CONFIG_END__*/");
-    src=src.replace(/\/\*__CLIENT_DATA_START__\*\/[\s\S]*?\/\*__CLIENT_DATA_END__\*\//, "/*__CLIENT_DATA_START__*/"+BLANK_DATA+"/*__CLIENT_DATA_END__*/");
-    download(filename, src, "text/html");
-    var out=$("tplOut");
-    out.innerHTML="";
-    var p=document.createElement("p"); p.className="note";
-    p.textContent="Downloaded "+filename+". Their secret token is below. Run the SQL line in Supabase, then give Claude the file plus their program to fill and publish.";
-    out.appendChild(p);
-    var pre=document.createElement("pre");
-    pre.textContent="Client link (after publish):\nhttps://YOURUSERNAME.github.io/programs/"+filename+"?k="+token+
-      "\n\nSQL to run once in Supabase (SQL Editor):\ninsert into client_tokens (client_slug, token) values ('"+slug+"', '"+token+"');";
-    out.appendChild(pre);
-  }catch(e){ setStatus("Template failed. "+e.message,"err"); }
-});
-
-if(settings.url&&settings.key&&settings.tok){ connect(); }
+if(settings.url&&settings.key&&settings.tok)connect();
 })();
 </script>
 </body>
