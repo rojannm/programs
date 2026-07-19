@@ -523,11 +523,13 @@ function renderTable(ex,container){
     var di=colsFor(ex).indexOf("Date"); if(di<0)di=0;
     var start=cur.length-1;
     while(start>0 && !(cur[start][di]||"").trim()) start--;
-    ensureOwned(ex.id);
-    for(var i=start;i<cur.length;i++){
+    var end=cur.length, copies=[];
+    for(var i=start;i<end;i++){
       var c=cur[i].slice(); c[di]=(i===start)?todayMD():"";
-      store.rows[ex.id].push(c);
+      copies.push(c);
     }
+    ensureOwned(ex.id);
+    store.rows[ex.id]=store.rows[ex.id].concat(copies);
     markDirty(ex.id); persist(true);
     renderTable(ex,container);
     toast("Last session copied for today");
