@@ -64,6 +64,7 @@ header.top .sub{color:var(--ink2);font-size:.95rem;margin:0}
   color:var(--accent);border-radius:999px;padding:8px 16px;cursor:pointer;box-shadow:var(--shadow)}
 .btn:active{transform:scale(.97)}
 .btn.quiet{color:var(--ink2);font-weight:500}
+.btn:disabled{opacity:.4;cursor:default}
 .btn:focus-visible,summary:focus-visible,[contenteditable]:focus-visible,.warmcheck:focus-visible,.chip:focus-visible{
   outline:2px solid var(--accent);outline-offset:2px}
 #syncpill{font-size:.8rem;color:var(--ink2);margin:0 0 12px;padding-left:4px;min-height:1.2em}
@@ -159,6 +160,8 @@ a{color:var(--accent);font-weight:600;text-underline-offset:3px}
     <p class="sub" id="clientSub"></p>
     <div class="toolbar">
       <button class="btn" id="copyLog" type="button">Copy my log</button>
+      <button class="btn quiet" id="undoBtn" type="button" disabled>↶ Undo</button>
+      <button class="btn quiet" id="redoBtn" type="button" disabled>↷ Redo</button>
       <button class="btn quiet" id="expandAll" type="button">Expand all</button>
       <button class="btn quiet" id="collapseAll" type="button">Collapse all</button>
     </div>
@@ -185,6 +188,7 @@ var STORE_KEY="program-"+SLUG;
 function loadStore(){ try{ return JSON.parse(localStorage.getItem(STORE_KEY))||{}; }catch(e){ return {}; } }
 var store=loadStore();
 store.rows=store.rows||{};
+store.rowBy=store.rowBy||{};
 store.open=store.open||{};
 store.dirty=store.dirty||{};
 store.warm=store.warm||{d:"",done:{}};
@@ -203,6 +207,56 @@ function toast(msg){
 }
 function todayMD(){ var d=new Date(); return (d.getMonth()+1)+"/"+d.getDate(); }
 function scheduleLocalSave(){ clearTimeout(saveTimer); saveTimer=setTimeout(function(){persist(true);},700); }
+
+/* ---------- undo / redo ---------- */
+var undoStack=[], redoStack=[], HISTORY_MAX=80;
+function snapshotState(){ return JSON.stringify({r:store.rows||{}, b:store.rowBy||{}, n:store.notes||""}); }
+function pushHistory(){
+  var snap=snapshotState();
+  if(undoStack.length && undoStack[undoStack.length-1]===snap) return;
+  undoStack.push(snap);
+  if(undoStack.length>HISTORY_MAX) undoStack.shift();
+  redoStack.length=0;
+  updateHistoryButtons();
+}
+function transitionTo(fromSnap,toSnap){
+  var before=JSON.parse(fromSnap), after=JSON.parse(toSnap);
+  store.rows=after.r||{}; store.rowBy=after.b||{}; store.notes=after.n||"";
+  var ids={};
+  Object.keys(before.r||{}).forEach(function(id){ids[id]=1;});
+  Object.keys(after.r||{}).forEach(function(id){ids[id]=1;});
+  Object.keys(ids).forEach(function(id){
+    var a=JSON.stringify((before.r||{})[id]||null), b=JSON.stringify((after.r||{})[id]||null);
+    var ab=JSON.stringify((before.b||{})[id]||null), bb=JSON.stringify((after.b||{})[id]||null);
+    if(a!==b||ab!==bb) store.dirty[id]=true;
+  });
+  if((before.n||"")!==(after.n||"")) store.notesDirty=true;
+  persist(false);
+  refreshAllOpenTables();
+  var fn=document.getElementById("freenote");
+  if(fn && fn.textContent!==(store.notes||"")) fn.textContent=store.notes||"";
+  schedulePush();
+  updateHistoryButtons();
+}
+function doUndo(){
+  if(!undoStack.length) return;
+  var cur=snapshotState(), target=undoStack.pop();
+  redoStack.push(cur);
+  transitionTo(cur,target);
+  toast("Undone");
+}
+function doRedo(){
+  if(!redoStack.length) return;
+  var cur=snapshotState(), target=redoStack.pop();
+  undoStack.push(cur);
+  transitionTo(cur,target);
+  toast("Redone");
+}
+function updateHistoryButtons(){
+  var u=document.getElementById("undoBtn"), r=document.getElementById("redoBtn");
+  if(u) u.disabled=!undoStack.length;
+  if(r) r.disabled=!redoStack.length;
+}
 
 var PROG=null, exIndex={};
 function allExercises(){
@@ -406,7 +460,7 @@ function chipBarFor(ex,container){
       var b=el("button","chip"+(isOn&&isOn()?" on":""),label);
       b.type="button";
       b.addEventListener("mousedown",function(e){e.preventDefault();});
-      b.addEventListener("click",function(){ handler(); if(isOn)b.classList.toggle("on",isOn()); });
+      b.addEventListener("click",function(){ pushHistory(); handler(); if(isOn)b.classList.toggle("on",isOn()); });
       td.appendChild(b);
     }
     function toggleNote(text){
@@ -472,6 +526,7 @@ function renderTable(ex,container){
     db.addEventListener("click",function(){
       if(!confirm("Delete this entry?")) return;
       ensureOwned(ex.id);
+      pushHistory();
       store.rows[ex.id].splice(ri,1);
       if(store.rowBy&&store.rowBy[ex.id]){
         var nb={};
@@ -491,6 +546,7 @@ function renderTable(ex,container){
   tbody.addEventListener("focusin",function(e){
     var tr=e.target.closest("tr");
     if(!tr||tr.classList.contains("chipbar")||tr.dataset.ri===undefined) return;
+    if(e.target.isContentEditable) pushHistory();
     chipbar.buildChips(parseInt(tr.dataset.ri,10));
     tr.after(chipbar);
   });
@@ -506,6 +562,7 @@ function renderTable(ex,container){
   add.type="button";
   add.addEventListener("click",function(){
     ensureOwned(ex.id);
+    pushHistory();
     var blank=colsFor(ex).map(function(){return "";});
     var di=colsFor(ex).indexOf("Date"); if(di>=0)blank[di]=todayMD();
     store.rows[ex.id].push(blank);
@@ -529,6 +586,7 @@ function renderTable(ex,container){
       copies.push(c);
     }
     ensureOwned(ex.id);
+    pushHistory();
     store.rows[ex.id]=store.rows[ex.id].concat(copies);
     markDirty(ex.id); persist(true);
     renderTable(ex,container);
@@ -654,6 +712,7 @@ function build(){
   var fn=el("div","freenote"); fn.id="freenote";
   makeEditable(fn);
   if(store.notes)fn.textContent=store.notes;
+  fn.addEventListener("focus",function(){ pushHistory(); });
   fn.addEventListener("input",function(){
     store.notes=fn.textContent; store.notesDirty=true;
     schedulePush(); scheduleLocalSave();
@@ -709,6 +768,17 @@ document.getElementById("expandAll").addEventListener("click",function(){
 });
 document.getElementById("collapseAll").addEventListener("click",function(){
   document.querySelectorAll("details.day, details.exercise, details.section").forEach(function(d){d.open=false;});
+});
+document.getElementById("undoBtn").addEventListener("click",doUndo);
+document.getElementById("redoBtn").addEventListener("click",doRedo);
+document.addEventListener("keydown",function(e){
+  var k=(e.key||"").toLowerCase();
+  if((e.metaKey||e.ctrlKey)&&k==="z"){
+    var ae=document.activeElement;
+    if(ae && ae.isContentEditable) return; /* let the cell's own text undo work while editing */
+    e.preventDefault();
+    if(e.shiftKey) doRedo(); else doUndo();
+  }
 });
 
 /* ---------- boot ---------- */

@@ -56,6 +56,7 @@ textarea{min-height:120px;resize:vertical}
 .btn.quiet{color:var(--ink2);font-weight:500}
 .btn.danger{color:var(--danger)}
 .btn.small{font-size:.78rem;padding:4px 12px;margin:4px 6px 0 0}
+.btn:disabled{opacity:.4;cursor:default}
 .btn:active{transform:scale(.97)}
 .btn:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 #status{font-size:.85rem;color:var(--ink2);margin-top:10px;min-height:1.2em}
@@ -138,7 +139,20 @@ pre{background:var(--bg2);border:1px solid var(--hair);border-radius:10px;paddin
     <h2>Clients</h2>
     <div id="clients"><p class="note">Connect first.</p></div>
     <button class="btn" id="newClientBtn" type="button" style="display:none">+ New client</button>
+    <button class="btn quiet" id="importNotesBtn" type="button" style="display:none">Import from Notes</button>
     <div id="newClientOut"></div>
+  </div>
+
+  <div class="card" id="importCard" style="display:none">
+    <h2>Import a client from iPhone Notes</h2>
+    <p class="note">Open the client's note on your phone, tap the note, Select All, Copy. Then paste it here. This reads day headings and exercise names. Weight history usually does not paste cleanly, so add that in the Logs tab after, or send messy notes to Claude.</p>
+    <label for="impName">Client display name</label>
+    <input type="text" id="impName" autocomplete="off" placeholder="e.g. Sarah K">
+    <label for="impText">Paste the note here</label>
+    <textarea id="impText" placeholder="Day A — PT with Rojan&#10;Back squat&#10;Lat pull down&#10;..."></textarea>
+    <button class="btn" id="impPreview" type="button">Preview</button>
+    <button class="btn quiet" id="impCancel" type="button">Close</button>
+    <div id="impOut"></div>
   </div>
 
   <div class="card" id="clientCard" style="display:none">
@@ -227,6 +241,7 @@ async function connect(){
     setStatus("Connected. "+clientsList.length+" clients.","ok");
     renderClients();
     $("newClientBtn").style.display="";
+    $("importNotesBtn").style.display="";
     var pre=new URLSearchParams(location.search).get("c");
     if(pre&&clientsList.some(function(c){return c.client_slug===pre;})) selectClient(pre);
   }catch(e){ setStatus("Could not connect. Check the three fields. "+e.message,"err"); }
@@ -277,6 +292,7 @@ async function loadProgram(){
   var r=await fetch(url("/rest/v1/client_programs?client_slug=eq."+esc(currentSlug)+"&select=data"),{headers:headers()});
   var arr=r.ok?await r.json():[];
   prog=arr.length?JSON.parse(arr[0].data):{name:currentSlug,subtitle:"",warmups:[],cycles:[]};
+  cUndo.length=0; cRedo.length=0;
 }
 function saveProgramSoon(){
   clearTimeout(progTimer);
@@ -291,6 +307,45 @@ async function saveProgram(){
     toast("Program saved");
   }catch(e){ toast("Save failed, check connection"); }
 }
+/* ---------- coach undo / redo (program editor) ---------- */
+var cUndo=[], cRedo=[], C_MAX=80;
+function progSnap(){ return prog?JSON.stringify(prog):null; }
+function pushCoachHistory(){
+  var s=progSnap();
+  if(s===null) return;
+  if(cUndo.length && cUndo[cUndo.length-1]===s) return;
+  cUndo.push(s);
+  if(cUndo.length>C_MAX) cUndo.shift();
+  cRedo.length=0;
+  updateCoachHistoryButtons();
+}
+function coachRestore(snap){
+  prog=JSON.parse(snap);
+  renderProgramEditor();
+  clearTimeout(progTimer);
+  saveProgram();
+  updateCoachHistoryButtons();
+}
+function coachUndo(){
+  if(!cUndo.length) return;
+  cRedo.push(progSnap());
+  coachRestore(cUndo.pop());
+  toast("Undone");
+}
+function coachRedo(){
+  if(!cRedo.length) return;
+  cUndo.push(progSnap());
+  coachRestore(cRedo.pop());
+  toast("Redone");
+}
+function updateCoachHistoryButtons(){
+  var u=$("cUndoBtn"), r=$("cRedoBtn");
+  if(u) u.disabled=!cUndo.length;
+  if(r) r.disabled=!cRedo.length;
+}
+/* one focusin listener captures pre-edit state for every field, button and select */
+$("tab-program").addEventListener("focusin",function(){ pushCoachHistory(); });
+
 function newExId(dayId){
   return (dayId||"x").toLowerCase()+"-"+randToken(6);
 }
@@ -312,6 +367,14 @@ function renderProgramEditor(){
   var host=$("tab-program"); host.textContent="";
   if(!prog){ host.appendChild(el("p","note","Loading…")); return; }
 
+  var hbar=el("div"); hbar.style.margin="0 0 8px";
+  var ub=el("button","btn small","↶ Undo"); ub.type="button"; ub.id="cUndoBtn"; ub.disabled=!cUndo.length;
+  ub.addEventListener("click",coachUndo);
+  var rb=el("button","btn small","↷ Redo"); rb.type="button"; rb.id="cRedoBtn"; rb.disabled=!cRedo.length;
+  rb.addEventListener("click",coachRedo);
+  hbar.appendChild(ub); hbar.appendChild(rb);
+  host.appendChild(hbar);
+
   var idrow=el("div");
   var nameL=el("label",null,"Client display name"); idrow.appendChild(nameL);
   idrow.appendChild(textInput(prog.name,"e.g. Jennifer C",function(v){prog.name=v;}));
@@ -330,12 +393,12 @@ function renderProgramEditor(){
     var u=textInput(w.url||"","video URL (optional)",function(v){w.url=v||null;});
     u.style.maxWidth="180px"; row.appendChild(u);
     var del=el("button","btn small danger","✕"); del.type="button";
-    del.addEventListener("click",function(){ prog.warmups.splice(i,1); saveProgramSoon(); renderProgramEditor(); });
+    del.addEventListener("click",function(){ pushCoachHistory(); prog.warmups.splice(i,1); saveProgramSoon(); renderProgramEditor(); });
     row.appendChild(del);
     wcard.appendChild(row);
   });
   var addW=el("button","btn small","+ Warm-up"); addW.type="button";
-  addW.addEventListener("click",function(){ prog.warmups.push({name:"",dose:"",url:null}); renderProgramEditor(); });
+  addW.addEventListener("click",function(){ pushCoachHistory(); prog.warmups.push({name:"",dose:"",url:null}); renderProgramEditor(); });
   wcard.appendChild(addW);
   host.appendChild(wcard);
 
@@ -344,6 +407,7 @@ function renderProgramEditor(){
   addCy.addEventListener("click",function(){
     var label=prompt("Name for the new cycle (e.g. Programming Oct 2026):");
     if(!label)return;
+    pushCoachHistory();
     prog.cycles=prog.cycles||[];
     prog.cycles.unshift({id:"cy"+randToken(6),label:label,archived:false,
       days:[{id:"A",type:"pt",title:"Day A",tag:"PT with Rojan",exercises:[]},
@@ -357,11 +421,12 @@ function renderProgramEditor(){
     var c=el("div","cycle"+(cy.archived?" archived":""));
     var head=el("div","cyhead");
     head.appendChild(textInput(cy.label,"cycle name",function(v){cy.label=v;}));
-    head.appendChild(check("archived",cy.archived,function(v){cy.archived=v; renderProgramEditor();}));
+    head.appendChild(check("archived",cy.archived,function(v){pushCoachHistory(); cy.archived=v; renderProgramEditor();}));
     var dup=el("button","btn small","Duplicate as new cycle"); dup.type="button";
     dup.addEventListener("click",function(){
       var label=prompt("Name for the new cycle:", "Copy of "+(cy.label||""));
       if(!label)return;
+      pushCoachHistory();
       var copy=JSON.parse(JSON.stringify(cy));
       copy.id="cy"+randToken(6); copy.label=label; copy.archived=false;
       copy.days.forEach(function(d){ d.exercises.forEach(function(ex){ ex.id=newExId(d.id); ex.hl=false; }); });
@@ -373,6 +438,7 @@ function renderProgramEditor(){
     var delCy=el("button","btn small danger","Delete cycle"); delCy.type="button";
     delCy.addEventListener("click",function(){
       if(!confirm("Delete cycle \""+(cy.label||"")+"\" from the program? Logged history stays in the database but stops being visible. Usually archive instead."))return;
+      pushCoachHistory();
       prog.cycles.splice(cyi,1); saveProgramSoon(); renderProgramEditor();
     });
     head.appendChild(delCy);
@@ -395,6 +461,7 @@ function renderProgramEditor(){
       var delD=el("button","btn small danger","✕ day"); delD.type="button";
       delD.addEventListener("click",function(){
         if(!confirm("Remove "+(day.title||"this day")+" and its exercises from the program?"))return;
+        pushCoachHistory();
         cy.days.splice(di,1); saveProgramSoon(); renderProgramEditor();
       });
       dh.appendChild(delD);
@@ -409,6 +476,7 @@ function renderProgramEditor(){
       list.addEventListener("drop",function(e){
         e.preventDefault(); list.classList.remove("dragover");
         if(!dragSrc)return;
+        pushCoachHistory();
         var ex=prog.cycles[dragSrc.cyi].days[dragSrc.di].exercises.splice(dragSrc.exi,1)[0];
         ex.hl=true;
         day.exercises.push(ex);
@@ -444,6 +512,7 @@ function renderProgramEditor(){
         mv.style.width="auto";
         mv.addEventListener("change",function(){
           if(!mv.value)return;
+          pushCoachHistory();
           var parts=mv.value.split(":");
           var ex2=day.exercises.splice(exi,1)[0];
           ex2.hl=true;
@@ -455,6 +524,7 @@ function renderProgramEditor(){
         var delE=el("button","btn small danger","✕"); delE.type="button";
         delE.addEventListener("click",function(){
           if(!confirm("Remove \""+ex.name+"\" from the program? Its logged history stays in the database."))return;
+          pushCoachHistory();
           day.exercises.splice(exi,1); saveProgramSoon(); renderProgramEditor();
         });
         r1.appendChild(delE);
@@ -479,6 +549,7 @@ function renderProgramEditor(){
       d.appendChild(list);
       var addE=el("button","btn small","+ Exercise"); addE.type="button";
       addE.addEventListener("click",function(){
+        pushCoachHistory();
         day.exercises.push({id:newExId(day.id),name:"New exercise",
           cols:["Date","Weight","Set","Reps"],hl:true});
         saveProgramSoon(); renderProgramEditor();
@@ -488,6 +559,7 @@ function renderProgramEditor(){
     });
     var addD=el("button","btn small","+ Day"); addD.type="button";
     addD.addEventListener("click",function(){
+      pushCoachHistory();
       var nid=String.fromCharCode(65+cy.days.length);
       cy.days.push({id:nid,type:"self",title:"Day "+nid,tag:"On your own",exercises:[]});
       saveProgramSoon(); renderProgramEditor();
@@ -734,6 +806,130 @@ $("newClientBtn").addEventListener("click",async function(){
     selectClient(slug);
   }catch(e){ setStatus("Could not create client. "+e.message,"err"); }
 });
+
+/* ---------- import from Notes ---------- */
+function parseNote(text){
+  var lines=text.replace(/\r/g,"").split("\n").map(function(l){return l.replace(/^[\s•\-\*•▪]+/,"").trim();})
+                .filter(function(l){return l.length;});
+  var dayRe=/^day\s*([a-z0-9]+)\b\s*[:\-–—]?\s*(.*)$/i;
+  var tableHdrRe=/^date\b.*\b(weight|set|rep)/i;
+  var supersetRe=/^[123]\/[23]\s/;
+  var dateRowRe=/^(\d{1,2}\/\d{1,2})\b\s*(.*)$/;
+  var keyRe=/^(keys?|example|anything highlighted|use links|do \d|if you|as many)/i;
+  var hasDays=lines.some(function(l){return dayRe.test(l);});
+  var warmups=[], days=[], curDay=null, curEx=null, inWarm=false, started=!hasDays;
+  function pushEx(name){
+    if(!curDay){ curDay={id:"A",type:"self",title:"Day A",tag:"",exercises:[]}; days.push(curDay); }
+    curEx={id:newExId(curDay.id),name:name,cols:["Date","Weight","Set","Reps"],_seed:[]};
+    curDay.exercises.push(curEx);
+  }
+  lines.forEach(function(line){
+    if(/^(home\s*work|homework|warm\s*ups?)/i.test(line)){ inWarm=true; started=true; curEx=null; return; }
+    var dm=line.match(dayRe);
+    if(dm){
+      inWarm=false; started=true;
+      var rest=(dm[2]||"").trim();
+      var isPt=/pt|rojan/i.test(rest);
+      curDay={id:dm[1].toUpperCase(),type:isPt?"pt":"self",
+              title:"Day "+dm[1].toUpperCase(),
+              tag:rest||(isPt?"PT with Rojan":"On your own"),exercises:[]};
+      days.push(curDay); curEx=null; return;
+    }
+    if(!started) return;                               /* skip note title / preamble before first heading */
+    if(tableHdrRe.test(line)) return;                 /* skip table headers */
+    if(keyRe.test(line)) return;                       /* skip the legend/keys lines */
+    var dr=line.match(dateRowRe);
+    if(dr && !supersetRe.test(line) && /\d/.test(dr[2]||"") && curEx){   /* real history row: date then numbers */
+      var parts=line.split(/\t|\s{2,}/).map(function(s){return s.trim();}).filter(function(s){return s.length;});
+      if(parts.length===1) parts=line.split(/\s+/);
+      var cells=[parts[0]||"", parts[1]||"", parts[2]||"", parts.slice(3).join(" ")||""];
+      curEx._seed.push(cells);
+      return;
+    }
+    if(inWarm){
+      var m=line.match(/^(.*?)(\d+(?:\s*[x×\-–]\s*\d+)?.*)?$/);
+      warmups.push({name:(m&&m[1]?m[1]:line).trim(),dose:(m&&m[2]?m[2].trim():""),url:null});
+      return;
+    }
+    pushEx(line);                                      /* otherwise an exercise */
+  });
+  if(!days.length) days=[{id:"A",type:"pt",title:"Day A",tag:"PT with Rojan",exercises:[]}];
+  return {warmups:warmups, days:days};
+}
+function importSummary(parsed){
+  var exCount=0, seedCount=0;
+  parsed.days.forEach(function(d){ exCount+=d.exercises.length; d.exercises.forEach(function(e){ seedCount+=(e._seed||[]).length; }); });
+  return {days:parsed.days.length, exercises:exCount, warmups:parsed.warmups.length, history:seedCount};
+}
+$("importNotesBtn").addEventListener("click",function(){
+  $("importCard").style.display=""; $("impText").focus();
+  $("importCard").scrollIntoView({behavior:"smooth"});
+});
+$("impCancel").addEventListener("click",function(){ $("importCard").style.display="none"; $("impOut").textContent=""; });
+$("impPreview").addEventListener("click",function(){
+  var name=$("impName").value.trim(), text=$("impText").value;
+  var out=$("impOut"); out.textContent="";
+  if(!name){ out.appendChild(el("p","note","Type the client's name first.")); return; }
+  if(!text.trim()){ out.appendChild(el("p","note","Paste the note text first.")); return; }
+  var parsed=parseNote(text);
+  var s=importSummary(parsed);
+  out.appendChild(el("p","note","Found "+s.days+" days, "+s.exercises+" exercises, "+s.warmups+" warm-ups, "+s.history+" history rows. Review below, then create."));
+  parsed.days.forEach(function(d){
+    out.appendChild(el("p","dayhdr",(d.title||d.id)+" · "+(d.tag||"")));
+    var ul=el("div");
+    d.exercises.forEach(function(e){
+      ul.appendChild(el("div","mini","• "+e.name+((e._seed&&e._seed.length)?"  ("+e._seed.length+" history rows)":"")));
+    });
+    out.appendChild(ul);
+  });
+  var create=el("button","btn","Create this client"); create.type="button";
+  create.addEventListener("click",function(){ createFromImport(name,parsed); });
+  out.appendChild(create);
+});
+async function createFromImport(name,parsed){
+  var slug=slugify(name);
+  var out=$("impOut");
+  if(clientsList.some(function(c){return c.client_slug===slug;})){
+    out.appendChild(el("p","note","A client named "+slug+" already exists. Pick another name.")); return;
+  }
+  var seeds=[];
+  parsed.days.forEach(function(d){
+    d.exercises.forEach(function(e){
+      var sd=e._seed||[]; delete e._seed;
+      sd.forEach(function(cells,i){
+        seeds.push({client_slug:slug,exercise_id:e.id,row_index:i,
+          date:cells[0]||null,weight:cells[1]||null,set:cells[2]||null,reps:cells[3]||null,
+          notes:JSON.stringify({c:cells}),updated_at:new Date().toISOString()});
+      });
+    });
+  });
+  var program={name:name,subtitle:"Training program with Rojan",
+    warmups:parsed.warmups,cycles:[{id:"cy"+randToken(6),label:"Imported program",archived:false,days:parsed.days}]};
+  try{
+    var r=await fetch(url("/rest/v1/client_programs"),{method:"POST",
+      headers:headers({"Prefer":"return=minimal"}),
+      body:JSON.stringify([{client_slug:slug,data:JSON.stringify(program),updated_at:new Date().toISOString()}])});
+    if(!r.ok)throw new Error("program "+r.status);
+    await issueToken(slug);
+    if(seeds.length){
+      for(var i=0;i<seeds.length;i+=400){
+        var sr=await fetch(url("/rest/v1/log_entries?on_conflict=client_slug,exercise_id,row_index"),{
+          method:"POST",headers:headers({"Prefer":"resolution=merge-duplicates,return=minimal"}),
+          body:JSON.stringify(seeds.slice(i,i+400))});
+        if(!sr.ok)throw new Error("history "+sr.status);
+      }
+    }
+    clientsList.push({client_slug:slug});
+    clientsList.sort(function(a,b){return a.client_slug<b.client_slug?-1:1;});
+    renderClients();
+    out.textContent="";
+    out.appendChild(el("p","note","Created "+slug+" with "+seeds.length+" history rows. Their link:"));
+    out.appendChild(el("pre",null,siteBase()+"client.html?c="+slug+"&k="+tokenFor(slug)));
+    out.appendChild(el("p","note","Now open the Program tab to check it and fix anything the import misread."));
+    $("impName").value=""; $("impText").value="";
+    selectClient(slug);
+  }catch(e){ out.appendChild(el("p","note","Could not import. "+e.message)); }
+}
 
 /* ---------- backup ---------- */
 $("exportBtn").addEventListener("click",async function(){
