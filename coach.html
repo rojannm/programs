@@ -766,6 +766,36 @@ function renderAccess(){
     });
     host.appendChild(iss);
   }
+
+  var hr=el("div"); hr.style.cssText="border-top:1px solid var(--hair);margin:20px 0 12px";
+  host.appendChild(hr);
+  host.appendChild(el("p","note","Danger zone. Deleting a client permanently removes their program, all logged history, private notes and link. This cannot be undone. If you just want to stop their access but keep the records, use Revoke instead."));
+  var del=el("button","btn danger","Delete client permanently"); del.type="button";
+  del.addEventListener("click",async function(){
+    var typed=prompt("This permanently deletes "+currentSlug+" and ALL their data, with no undo.\n\nType the client id exactly to confirm:  "+currentSlug);
+    if(typed===null) return;
+    if(typed.trim()!==currentSlug){ toast("Name did not match. Nothing deleted."); return; }
+    if(!confirm("Last check: permanently delete "+currentSlug+" and everything logged for them?")) return;
+    await deleteClient(currentSlug);
+  });
+  host.appendChild(del);
+}
+async function deleteClient(slug){
+  try{
+    setStatus("Deleting "+slug+"…");
+    await fetch(url("/rest/v1/log_entries?client_slug=eq."+esc(slug)),{method:"DELETE",headers:headers()});
+    await fetch(url("/rest/v1/client_private?client_slug=eq."+esc(slug)),{method:"DELETE",headers:headers()});
+    await fetch(url("/rest/v1/client_tokens?client_slug=eq."+esc(slug)),{method:"DELETE",headers:headers()});
+    var r=await fetch(url("/rest/v1/client_programs?client_slug=eq."+esc(slug)),{method:"DELETE",headers:headers()});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    clientsList=clientsList.filter(function(c){return c.client_slug!==slug;});
+    tokensList=tokensList.filter(function(t){return t.client_slug!==slug;});
+    currentSlug=null;
+    $("clientCard").style.display="none";
+    renderClients();
+    setStatus("Deleted "+slug+".","ok");
+    toast("Client deleted");
+  }catch(e){ setStatus("Delete failed. "+e.message,"err"); }
 }
 async function revokeToken(slug){
   await fetch(url("/rest/v1/client_tokens?client_slug=eq."+esc(slug)),{method:"DELETE",headers:headers()});
