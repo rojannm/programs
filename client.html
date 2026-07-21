@@ -57,7 +57,7 @@ body{
 }
 .wrap{max-width:680px;margin:0 auto;padding:20px 16px 96px}
 header.top{padding:18px 2px 6px}
-header.top h1{font-size:1.7rem;font-weight:800;letter-spacing:-.02em;margin:0 0 4px;text-wrap:balance}
+header.top h1{font-size:1.7rem;font-weight:800;letter-spacing:-.02em;margin:0 0 4px;text-wrap:balance;text-transform:capitalize}
 header.top .sub{color:var(--ink2);font-size:.95rem;margin:0}
 .toolbar{display:flex;gap:8px;margin:14px 0 6px;flex-wrap:wrap;align-items:center}
 .btn{font:inherit;font-size:.9rem;font-weight:600;border:1px solid var(--hair);background:var(--card);
@@ -463,6 +463,13 @@ function chipBarFor(ex,container){
       b.addEventListener("click",function(){ pushHistory(); handler(); if(isOn)b.classList.toggle("on",isOn()); });
       td.appendChild(b);
     }
+    function esc(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
+    function hasTok(ci,tok){ return new RegExp("(^|\\s)"+esc(tok)+"($|\\s)").test(getCell(ci)); }
+    function toggleTok(ci,tok){
+      var cur=getCell(ci);
+      if(hasTok(ci,tok)) setCell(ci,cur.replace(new RegExp("(^|\\s)"+esc(tok)+"($|\\s)")," ").replace(/\s+/g," ").trim());
+      else setCell(ci,(cur+" "+tok).trim());
+    }
     function toggleNote(text){
       var cur=getCell(ni);
       if(cur.indexOf(text)>=0){
@@ -470,11 +477,9 @@ function chipBarFor(ex,container){
                     .replace(/^\s*,\s*/,"").replace(/\s*,\s*$/,"").trim());
       }else{ setCell(ni,cur?cur+", "+text:text); }
     }
-    chip("WU",function(){
-      var cur=getCell(wi);
-      if(/\bWU\b/.test(cur)) setCell(wi,cur.replace(/\s*\bWU\b/,"").trim());
-      else setCell(wi,cur?cur+" WU":"WU");
-    },function(){ return /\bWU\b/.test(getCell(wi)); });
+    ["WU","bi","uni","ES","kg","lbs"].forEach(function(t){
+      chip(t,function(){toggleTok(wi,t);},function(){return hasTok(wi,t);});
+    });
     chip("L weaker",function(){toggleNote("L weaker");},function(){return getCell(ni).indexOf("L weaker")>=0;});
     chip("R weaker",function(){toggleNote("R weaker");},function(){return getCell(ni).indexOf("R weaker")>=0;});
   };
@@ -822,6 +827,21 @@ async function boot(){
     if(Object.keys(store.dirty).length||store.notesDirty)pushDirty();
   },30000);
 }
+
+/* Recover from the browser suspending a long-idle tab (esp. iOS Safari):
+   the page can come back with its rendered content torn down. */
+window.addEventListener("pageshow",function(e){ if(e.persisted) location.reload(); });
+var _hiddenAt=0;
+document.addEventListener("visibilitychange",function(){
+  if(document.hidden){ _hiddenAt=Date.now(); return; }
+  if(_hiddenAt && Date.now()-_hiddenAt>60000){
+    if(!document.querySelector("details.day")){ location.reload(); return; }
+    if(typeof cloudEnabled==="function" && cloudEnabled()){
+      pullLogs().then(refreshAllOpenTables).catch(function(){});
+    }
+  }
+  _hiddenAt=0;
+});
 boot();
 })();
 </script>

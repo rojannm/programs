@@ -63,7 +63,7 @@ textarea{min-height:120px;resize:vertical}
 #status.ok{color:var(--good)}
 #status.err{color:var(--danger)}
 .clientbtn{display:inline-block;font:inherit;font-size:.9rem;font-weight:600;color:var(--ink);
-  background:var(--bg2);border:1px solid var(--hair);border-radius:999px;padding:7px 15px;margin:4px 6px 4px 0;cursor:pointer}
+  background:var(--bg2);border:1px solid var(--hair);border-radius:999px;padding:7px 15px;margin:4px 6px 4px 0;cursor:pointer;text-transform:capitalize}
 .clientbtn.on{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
 .clientbtn.revoked{opacity:.55}
 .tabs{display:flex;gap:4px;border-bottom:1px solid var(--hair);margin:8px 0 14px;flex-wrap:wrap}
@@ -209,6 +209,11 @@ function randToken(n){
   return out;
 }
 function slugify(name){ return name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,""); }
+function uniqueSlug(name){
+  var base=slugify(name)||"client", s=base, n=1;
+  while(clientsList.some(function(c){return c.client_slug===s;})){ n++; s=base+"-"+n; }
+  return s;
+}
 function todayMD(){ var d=new Date(); return (d.getMonth()+1)+"/"+d.getDate(); }
 function download(filename,text){
   var blob=new Blob([text],{type:"application/json"});
@@ -233,9 +238,13 @@ async function connect(){
   if(!settings.url||!settings.key||!settings.tok){ setStatus("Fill in all three fields.","err"); return; }
   setStatus("Connecting…");
   try{
-    var r=await fetch(url("/rest/v1/client_programs?select=client_slug&order=client_slug.asc"),{headers:headers()});
+    var r=await fetch(url("/rest/v1/client_programs?select=client_slug,data&order=client_slug.asc"),{headers:headers()});
     if(!r.ok) throw new Error("HTTP "+r.status);
-    clientsList=await r.json();
+    clientsList=(await r.json()).map(function(c){
+      var nm=c.client_slug;
+      try{ nm=(JSON.parse(c.data).name)||c.client_slug; }catch(e){}
+      return {client_slug:c.client_slug, name:nm};
+    });
     var t=await fetch(url("/rest/v1/client_tokens?select=client_slug,token"),{headers:headers()});
     tokensList=t.ok?await t.json():[];
     setStatus("Connected. "+clientsList.length+" clients.","ok");
@@ -256,8 +265,9 @@ function renderClients(){
   var host=$("clients"); host.textContent="";
   if(!clientsList.length){ host.appendChild(el("p","note","No clients yet. Use + New client.")); return; }
   clientsList.forEach(function(c){
+    var label=(c.name||c.client_slug)+(tokenFor(c.client_slug)?"":" (revoked)");
     var b=el("button","clientbtn"+(tokenFor(c.client_slug)?"":" revoked")+(c.client_slug===currentSlug?" on":""),
-      c.client_slug+(tokenFor(c.client_slug)?"":" (revoked)"));
+      label);
     b.type="button";
     b.addEventListener("click",function(){ selectClient(c.client_slug); });
     host.appendChild(b);
@@ -739,6 +749,9 @@ function renderAccess(){
       navigator.clipboard.writeText(pre.textContent).then(function(){toast("Link copied");});
     });
     host.appendChild(copy);
+    var open=el("button","btn","Open their page"); open.type="button";
+    open.addEventListener("click",function(){ window.open(pre.textContent,"_blank","noopener"); });
+    host.appendChild(open);
     var rot=el("button","btn quiet","New link (old one stops working)"); rot.type="button";
     rot.addEventListener("click",async function(){
       if(!confirm("Give this client a fresh link and kill the old one?"))return;
@@ -813,10 +826,7 @@ async function issueToken(slug){
 $("newClientBtn").addEventListener("click",async function(){
   var name=prompt("Client display name (what they see, e.g. Sarah K):");
   if(!name||!name.trim())return;
-  var slug=slugify(name);
-  if(clientsList.some(function(c){return c.client_slug===slug;})){
-    setStatus("A client with that name already exists.","err"); return;
-  }
+  var slug=uniqueSlug(name);
   var blank={name:name.trim(),subtitle:"Training program with Rojan",
     warmups:[],cycles:[{id:"cy"+randToken(6),label:"Programming",archived:false,
       days:[{id:"A",type:"pt",title:"Day A",tag:"PT with Rojan",exercises:[]},
@@ -827,7 +837,7 @@ $("newClientBtn").addEventListener("click",async function(){
       body:JSON.stringify([{client_slug:slug,data:JSON.stringify(blank),updated_at:new Date().toISOString()}])});
     if(!r.ok)throw new Error("HTTP "+r.status);
     await issueToken(slug);
-    clientsList.push({client_slug:slug});
+    clientsList.push({client_slug:slug,name:name.trim()});
     clientsList.sort(function(a,b){return a.client_slug<b.client_slug?-1:1;});
     renderClients();
     var out=$("newClientOut"); out.textContent="";
@@ -917,11 +927,8 @@ $("impPreview").addEventListener("click",function(){
   out.appendChild(create);
 });
 async function createFromImport(name,parsed){
-  var slug=slugify(name);
+  var slug=uniqueSlug(name);
   var out=$("impOut");
-  if(clientsList.some(function(c){return c.client_slug===slug;})){
-    out.appendChild(el("p","note","A client named "+slug+" already exists. Pick another name.")); return;
-  }
   var seeds=[];
   parsed.days.forEach(function(d){
     d.exercises.forEach(function(e){
@@ -949,7 +956,7 @@ async function createFromImport(name,parsed){
         if(!sr.ok)throw new Error("history "+sr.status);
       }
     }
-    clientsList.push({client_slug:slug});
+    clientsList.push({client_slug:slug,name:name.trim()});
     clientsList.sort(function(a,b){return a.client_slug<b.client_slug?-1:1;});
     renderClients();
     out.textContent="";
