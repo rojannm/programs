@@ -117,7 +117,7 @@ pre{background:var(--bg2);border:1px solid var(--hair);border-radius:10px;paddin
 </head>
 <body>
 <div class="wrap">
-  <h1>Coach tools</h1>
+  <h1>Coach tools <button class="btn quiet" id="themeBtn" type="button" title="Light / dark" style="font-size:.9rem;vertical-align:middle">☾</button></h1>
   <p class="sub">Private page for Rojan. Program changes you make here go live for the client the next time their page loads.</p>
 
   <div class="card">
@@ -461,7 +461,7 @@ function renderProgramEditor(){
       dh.appendChild(textInput(day.title,"Day title",function(v){day.title=v;}));
       dh.appendChild(textInput(day.tag,"tag e.g. PT with Rojan",function(v){day.tag=v;}));
       var sel=document.createElement("select");
-      [["pt","PT day (blue)"],["self","Self day (pink)"]].forEach(function(o){
+      [["pt","Blue (PT)"],["self","Pink (self)"],["green","Green"],["purple","Purple"],["orange","Orange"],["teal","Teal"],["gray","Gray"]].forEach(function(o){
         var op=document.createElement("option"); op.value=o[0]; op.textContent=o[1];
         if(day.type===o[0])op.selected=true; sel.appendChild(op);
       });
@@ -531,9 +531,19 @@ function renderProgramEditor(){
           toast("Moved. History goes with it.");
         });
         r1.appendChild(mv);
+        var arcE=el("button","btn small","Archive"); arcE.type="button";
+        arcE.title="Take it out of the program but keep its history to reuse later";
+        arcE.addEventListener("click",function(){
+          pushCoachHistory();
+          prog.archived_exercises=prog.archived_exercises||[];
+          prog.archived_exercises.push(day.exercises.splice(exi,1)[0]);
+          saveProgramSoon(); renderProgramEditor();
+          toast("Archived. Find it under Archived exercises.");
+        });
+        r1.appendChild(arcE);
         var delE=el("button","btn small danger","✕"); delE.type="button";
         delE.addEventListener("click",function(){
-          if(!confirm("Remove \""+ex.name+"\" from the program? Its logged history stays in the database."))return;
+          if(!confirm("Remove \""+ex.name+"\" from the program? Its logged history stays in the database. Tip: use Archive instead if you want to reuse it later."))return;
           pushCoachHistory();
           day.exercises.splice(exi,1); saveProgramSoon(); renderProgramEditor();
         });
@@ -577,6 +587,50 @@ function renderProgramEditor(){
     c.appendChild(addD);
     host.appendChild(c);
   });
+
+  prog.archived_exercises=prog.archived_exercises||[];
+  if(prog.archived_exercises.length){
+    var arc=el("div","cycle");
+    arc.appendChild(el("strong",null,"Archived exercises"));
+    arc.appendChild(el("p","note","Not in any program right now. Move one back into a day and its full weight/rep history comes with it."));
+    prog.archived_exercises.forEach(function(ex,ai){
+      var card=el("div","excard");
+      var mainw=el("div","exmain");
+      var row=el("div","exrow1");
+      row.appendChild(textInput(ex.name,"exercise name",function(v){ex.name=v;}));
+      var mv=document.createElement("select");
+      var op0=document.createElement("option"); op0.textContent="Move into…"; op0.value=""; mv.appendChild(op0);
+      prog.cycles.forEach(function(cy2,c2){
+        (cy2.days||[]).forEach(function(d2,dd2){
+          var op=document.createElement("option"); op.value=c2+":"+dd2;
+          op.textContent=(cy2.label||"cycle")+" / "+(d2.title||d2.id); mv.appendChild(op);
+        });
+      });
+      mv.style.width="auto";
+      mv.addEventListener("change",function(){
+        if(!mv.value)return;
+        pushCoachHistory();
+        var p=mv.value.split(":");
+        var moved=prog.archived_exercises.splice(ai,1)[0]; moved.hl=true;
+        prog.cycles[p[0]].days[p[1]].exercises.push(moved);
+        saveProgramSoon(); renderProgramEditor();
+        toast("Moved back in. History reconnected.");
+      });
+      row.appendChild(mv);
+      var del=el("button","btn small danger","✕"); del.type="button";
+      del.addEventListener("click",function(){
+        if(!confirm("Permanently remove \""+ex.name+"\" from the archive? Logged history stays in the database but becomes unreachable in the app."))return;
+        pushCoachHistory();
+        prog.archived_exercises.splice(ai,1); saveProgramSoon(); renderProgramEditor();
+      });
+      row.appendChild(del);
+      mainw.appendChild(row);
+      card.appendChild(mainw);
+      arc.appendChild(card);
+    });
+    host.appendChild(arc);
+  }
+
   var saveNow=el("button","btn","Save now"); saveNow.type="button";
   saveNow.addEventListener("click",function(){ clearTimeout(progTimer); saveProgram(); });
   host.appendChild(saveNow);
@@ -1016,6 +1070,21 @@ $("importFile").addEventListener("change",function(){
   reader.readAsText(f);
   this.value="";
 });
+
+function applyTheme(){
+  var t=null; try{ t=localStorage.getItem("theme"); }catch(e){}
+  var root=document.documentElement;
+  if(t==="light"||t==="dark"){ root.setAttribute("data-theme",t); } else { root.removeAttribute("data-theme"); }
+  var dark = t==="dark" || (t!=="light" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  var b=$("themeBtn"); if(b) b.textContent = dark ? "☀" : "☾";
+}
+$("themeBtn").addEventListener("click",function(){
+  var cur=null; try{ cur=localStorage.getItem("theme"); }catch(e){}
+  var next = cur==="dark" ? "light" : "dark";
+  try{ localStorage.setItem("theme",next); }catch(e){}
+  applyTheme();
+});
+applyTheme();
 
 if(settings.url&&settings.key&&settings.tok)connect();
 })();

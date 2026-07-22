@@ -65,6 +65,14 @@ header.top .sub{color:var(--ink2);font-size:.95rem;margin:0}
 .btn:active{transform:scale(.97)}
 .btn.quiet{color:var(--ink2);font-weight:500}
 .btn:disabled{opacity:.4;cursor:default}
+#exSearch{width:100%;font:inherit;font-size:.92rem;color:var(--ink);background:var(--card);
+  border:1px solid var(--hair);border-radius:999px;padding:9px 16px;margin:2px 0 4px}
+#exSearch:focus{outline:2px solid var(--accent);outline-offset:1px}
+details.exercise.nomatch{display:none}
+details.day.nomatch{display:none}
+.copybtn{font:inherit;font-size:.78rem;font-weight:600;color:var(--ink2);background:var(--bg2);
+  border:1px solid var(--hair);border-radius:8px;padding:3px 10px;cursor:pointer;margin-top:6px}
+.copybtn:active{transform:scale(.97)}
 .btn:focus-visible,summary:focus-visible,[contenteditable]:focus-visible,.warmcheck:focus-visible,.chip:focus-visible{
   outline:2px solid var(--accent);outline-offset:2px}
 #syncpill{font-size:.8rem;color:var(--ink2);margin:0 0 12px;padding-left:4px;min-height:1.2em}
@@ -86,6 +94,28 @@ summary .count{margin-left:auto;color:var(--ink2);font-size:.85rem;font-weight:5
 .daychip{padding:2px 10px;border-radius:7px;font-weight:800;font-size:1.05rem;flex:0 0 auto}
 .day-pt .daychip{background:var(--pt-bg);color:var(--pt-ink)}
 .day-self .daychip{background:var(--self-bg);color:var(--self-ink)}
+.day-green .daychip{background:#d6f2df;color:#177537}
+.day-purple .daychip{background:#e9defa;color:#6d3bbf}
+.day-orange .daychip{background:#ffe6c7;color:#b25b00}
+.day-teal .daychip{background:#cdeef0;color:#0a6b74}
+.day-gray .daychip{background:#e5e5ea;color:#3a3a3f}
+@media (prefers-color-scheme: dark){
+  .day-green .daychip{background:#1c3d26;color:#8fdda4}
+  .day-purple .daychip{background:#332052;color:#c9aaf5}
+  .day-orange .daychip{background:#4a3315;color:#ffc178}
+  .day-teal .daychip{background:#123c40;color:#7fd6dd}
+  .day-gray .daychip{background:#39393d;color:#c7c7cc}
+}
+:root[data-theme="dark"] .day-green .daychip{background:#1c3d26;color:#8fdda4}
+:root[data-theme="dark"] .day-purple .daychip{background:#332052;color:#c9aaf5}
+:root[data-theme="dark"] .day-orange .daychip{background:#4a3315;color:#ffc178}
+:root[data-theme="dark"] .day-teal .daychip{background:#123c40;color:#7fd6dd}
+:root[data-theme="dark"] .day-gray .daychip{background:#39393d;color:#c7c7cc}
+:root[data-theme="light"] .day-green .daychip{background:#d6f2df;color:#177537}
+:root[data-theme="light"] .day-purple .daychip{background:#e9defa;color:#6d3bbf}
+:root[data-theme="light"] .day-orange .daychip{background:#ffe6c7;color:#b25b00}
+:root[data-theme="light"] .day-teal .daychip{background:#cdeef0;color:#0a6b74}
+:root[data-theme="light"] .day-gray .daychip{background:#e5e5ea;color:#3a3a3f}
 summary .daytag{color:var(--ink2);font-size:.9rem;font-weight:500}
 .daytoggle{margin-left:auto;flex:0 0 auto;font:inherit;font-size:.78rem;font-weight:600;
   color:var(--ink2);background:var(--bg2);border:1px solid var(--hair);border-radius:999px;padding:4px 10px;cursor:pointer}
@@ -164,7 +194,9 @@ a{color:var(--accent);font-weight:600;text-underline-offset:3px}
       <button class="btn quiet" id="redoBtn" type="button" disabled>↷ Redo</button>
       <button class="btn quiet" id="expandAll" type="button">Expand all</button>
       <button class="btn quiet" id="collapseAll" type="button">Collapse all</button>
+      <button class="btn quiet" id="themeBtn" type="button" title="Light / dark">☾</button>
     </div>
+    <input type="search" id="exSearch" placeholder="Search exercises…" autocomplete="off">
     <p id="syncpill"></p>
   </header>
   <div id="content"><div id="loadcard">Loading your program…</div></div>
@@ -649,7 +681,7 @@ function build(){
     var host=el("div");
     sec.appendChild(host);
     (cy.days||[]).forEach(function(day){
-      var d=el("details","day "+(day.type==="pt"?"day-pt":"day-self"));
+      var d=el("details","day day-"+(day.type||"self"));
       var dsum=el("summary");
       dsum.appendChild(el("span","chev"));
       dsum.appendChild(el("span","daychip",day.title||("Day "+day.id)));
@@ -722,7 +754,15 @@ function build(){
     store.notes=fn.textContent; store.notesDirty=true;
     schedulePush(); scheduleLocalSave();
   });
-  dbody.appendChild(fn); disc.appendChild(dbody);
+  dbody.appendChild(fn);
+  var cpy=el("button","copybtn","Copy"); cpy.type="button";
+  cpy.addEventListener("click",function(){
+    var t=fn.textContent||"";
+    if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(t).then(function(){toast("Copied");},function(){toast("Copy failed");}); }
+    else{ toast("Copy not supported"); }
+  });
+  dbody.appendChild(cpy);
+  disc.appendChild(dbody);
   content.appendChild(disc);
   trackOpen(disc,"sec:discuss");
 
@@ -776,6 +816,38 @@ document.getElementById("collapseAll").addEventListener("click",function(){
 });
 document.getElementById("undoBtn").addEventListener("click",doUndo);
 document.getElementById("redoBtn").addEventListener("click",doRedo);
+
+/* theme toggle (auto -> light -> dark, remembered) */
+function applyTheme(){
+  var t=null; try{ t=localStorage.getItem("theme"); }catch(e){}
+  var root=document.documentElement;
+  if(t==="light"||t==="dark"){ root.setAttribute("data-theme",t); }
+  else{ root.removeAttribute("data-theme"); }
+  var dark = t==="dark" || (t!=="light" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  var b=document.getElementById("themeBtn"); if(b) b.textContent = dark ? "☀" : "☾";
+}
+document.getElementById("themeBtn").addEventListener("click",function(){
+  var cur=null; try{ cur=localStorage.getItem("theme"); }catch(e){}
+  var next = cur==="dark" ? "light" : "dark";
+  try{ localStorage.setItem("theme",next); }catch(e){}
+  applyTheme();
+});
+applyTheme();
+
+/* search / filter exercises */
+document.getElementById("exSearch").addEventListener("input",function(){
+  var q=this.value.trim().toLowerCase();
+  document.querySelectorAll("details.exercise").forEach(function(ex){
+    var h=ex.querySelector("h3"); var m=!q || (h && h.textContent.toLowerCase().indexOf(q)>=0);
+    ex.classList.toggle("nomatch",!m);
+    if(q&&m){ ex.open=true; var d=ex.closest("details.day"); if(d)d.open=true; var s=ex.closest("details.section"); if(s)s.open=true; }
+  });
+  document.querySelectorAll("details.day").forEach(function(d){
+    var any=d.querySelector("details.exercise:not(.nomatch)");
+    d.classList.toggle("nomatch", !!q && !any);
+  });
+});
+
 document.addEventListener("keydown",function(e){
   var k=(e.key||"").toLowerCase();
   if((e.metaKey||e.ctrlKey)&&k==="z"){
