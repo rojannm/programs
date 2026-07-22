@@ -630,6 +630,20 @@ function renderTable(ex,container){
     toast("Last session copied for today");
   });
   actions.appendChild(same);
+  var cpyEx=el("button","addrow quiet","Copy");
+  cpyEx.type="button";
+  cpyEx.title="Copy this exercise's log as text";
+  cpyEx.addEventListener("click",function(){
+    var cols2=colsFor(ex), lines=[ex.name];
+    rowsFor(ex).forEach(function(r){
+      var line=r.map(function(c,i){return c?(cols2[i]||"").toLowerCase()+" "+c:"";}).filter(Boolean).join(" | ");
+      if(line)lines.push("  "+line);
+    });
+    var text=lines.join("\n");
+    if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(text).then(function(){toast("Copied");},function(){toast("Copy failed");}); }
+    else{ toast("Copy not supported"); }
+  });
+  actions.appendChild(cpyEx);
   container.appendChild(actions);
 }
 
@@ -755,13 +769,6 @@ function build(){
     schedulePush(); scheduleLocalSave();
   });
   dbody.appendChild(fn);
-  var cpy=el("button","copybtn","Copy"); cpy.type="button";
-  cpy.addEventListener("click",function(){
-    var t=fn.textContent||"";
-    if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(t).then(function(){toast("Copied");},function(){toast("Copy failed");}); }
-    else{ toast("Copy not supported"); }
-  });
-  dbody.appendChild(cpy);
   disc.appendChild(dbody);
   content.appendChild(disc);
   trackOpen(disc,"sec:discuss");

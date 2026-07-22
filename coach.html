@@ -119,6 +119,9 @@ tr.chipbar td{background:var(--bg2);padding:6px 10px}
 #logSearch{width:100%;font:inherit;font-size:.92rem;color:var(--ink);background:var(--bg);
   border:1px solid var(--hair);border-radius:999px;padding:8px 14px;margin:0 0 10px}
 .exblock.nomatch{display:none}
+.ordbtn{border:0;background:none;color:var(--ink2);font-size:.6rem;line-height:1;cursor:pointer;padding:2px 3px}
+.ordbtn:hover:not(:disabled){color:var(--accent)}
+.ordbtn:disabled{opacity:.25;cursor:default}
 #toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(80px);
   background:var(--ink);color:var(--bg);padding:10px 20px;border-radius:999px;font-size:.9rem;
   font-weight:600;opacity:0;transition:all .25s ease;pointer-events:none;z-index:50;white-space:nowrap}
@@ -497,12 +500,25 @@ function renderProgramEditor(){
         e.preventDefault(); list.classList.remove("dragover");
         if(!dragSrc)return;
         pushCoachHistory();
-        var ex=prog.cycles[dragSrc.cyi].days[dragSrc.di].exercises.splice(dragSrc.exi,1)[0];
+        var srcDay=prog.cycles[dragSrc.cyi].days[dragSrc.di];
+        var sameDay=(dragSrc.cyi===cyi && dragSrc.di===di);
+        var cards=Array.from(list.querySelectorAll(".excard"));
+        var targetCard=e.target.closest(".excard");
+        var idx=day.exercises.length;
+        if(targetCard){
+          var pos=cards.indexOf(targetCard);
+          var rect=targetCard.getBoundingClientRect();
+          if((e.clientY-rect.top) > rect.height/2) pos++;
+          idx=pos;
+        }
+        var ex=srcDay.exercises.splice(dragSrc.exi,1)[0];
         ex.hl=true;
-        day.exercises.push(ex);
+        if(sameDay && dragSrc.exi < idx) idx--;
+        idx=Math.max(0,Math.min(idx, day.exercises.length));
+        day.exercises.splice(idx,0,ex);
         dragSrc=null;
         saveProgramSoon(); renderProgramEditor();
-        toast("Moved. History goes with it.");
+        toast("Moved.");
       });
       day.exercises=day.exercises||[];
       day.exercises.forEach(function(ex,exi){
@@ -514,7 +530,24 @@ function renderProgramEditor(){
           e.dataTransfer.effectAllowed="move";
         });
         card.addEventListener("dragend",function(){ card.classList.remove("dragging"); });
-        card.appendChild(el("span","grip","⠿"));
+        var handle=el("div","grip"); handle.style.cssText="display:flex;flex-direction:column;gap:1px;align-items:center";
+        var upB=el("button","ordbtn","▲"); upB.type="button"; upB.title="Move up";
+        upB.disabled=(exi===0);
+        upB.addEventListener("click",function(){
+          if(exi===0)return; pushCoachHistory();
+          var a=day.exercises; var t=a[exi-1]; a[exi-1]=a[exi]; a[exi]=t;
+          saveProgramSoon(); renderProgramEditor();
+        });
+        var dragDot=el("span",null,"⠿"); dragDot.style.cssText="cursor:grab;line-height:1";
+        var dnB=el("button","ordbtn","▼"); dnB.type="button"; dnB.title="Move down";
+        dnB.disabled=(exi===day.exercises.length-1);
+        dnB.addEventListener("click",function(){
+          if(exi>=day.exercises.length-1)return; pushCoachHistory();
+          var a=day.exercises; var t=a[exi+1]; a[exi+1]=a[exi]; a[exi]=t;
+          saveProgramSoon(); renderProgramEditor();
+        });
+        handle.appendChild(upB); handle.appendChild(dragDot); handle.appendChild(dnB);
+        card.appendChild(handle);
         var main=el("div","exmain");
         var r1=el("div","exrow1");
         r1.appendChild(textInput(ex.name,"exercise name",function(v){ex.name=v; ex.hl=true;}));
@@ -676,7 +709,41 @@ async function loadLogs(){
   Object.keys(logModel).forEach(function(k){
     logModel[k]=logModel[k].filter(function(x){return x!==undefined;});
   });
-  host.textContent="";
+  logNotesText=notesText;
+  lUndo.length=0; lRedo.length=0;
+  renderLogsBody();
+}
+var logNotesText="";
+var lUndo=[], lRedo=[];
+function logSnap(){ return JSON.stringify(logModel); }
+function pushLogHistory(){
+  var s=logSnap();
+  if(lUndo.length && lUndo[lUndo.length-1]===s) return;
+  lUndo.push(s); if(lUndo.length>60) lUndo.shift(); lRedo.length=0;
+  updateLogHistBtns();
+}
+function updateLogHistBtns(){ var u=$("logUndoBtn"),r=$("logRedoBtn"); if(u)u.disabled=!lUndo.length; if(r)r.disabled=!lRedo.length; }
+function logTransition(fromSnap,toSnap){
+  var before=JSON.parse(fromSnap);
+  logModel=JSON.parse(toSnap);
+  var ids={}; Object.keys(before).forEach(function(k){ids[k]=1;}); Object.keys(logModel).forEach(function(k){ids[k]=1;});
+  var map=exById();
+  Object.keys(ids).forEach(function(id){
+    if(JSON.stringify(before[id]||null)!==JSON.stringify(logModel[id]||null)){
+      var ex=map[id]?map[id].ex:{id:id,name:id,cols:["Date","Weight","Set","Reps"]};
+      pushCoachRows(ex, logModel[id]||[]);
+    }
+  });
+  renderLogsBody();
+}
+function logUndo(){ if(!lUndo.length)return; lRedo.push(logSnap()); logTransition(logSnap(),lUndo.pop()); toast("Undone"); }
+function logRedo(){ if(!lRedo.length)return; lUndo.push(logSnap()); logTransition(logSnap(),lRedo.pop()); toast("Redone"); }
+function renderLogsBody(){
+  var host=$("tab-logs"); host.textContent="";
+  var bar=el("div"); bar.style.cssText="display:flex;gap:6px;margin:0 0 8px";
+  var ub=el("button","btn small","↶ Undo"); ub.type="button"; ub.id="logUndoBtn"; ub.disabled=!lUndo.length; ub.addEventListener("click",logUndo);
+  var rb=el("button","btn small","↷ Redo"); rb.type="button"; rb.id="logRedoBtn"; rb.disabled=!lRedo.length; rb.addEventListener("click",logRedo);
+  bar.appendChild(ub); bar.appendChild(rb); host.appendChild(bar);
   var search=document.createElement("input"); search.type="search"; search.id="logSearch";
   search.placeholder="Search exercises…";
   search.addEventListener("input",function(){
@@ -713,10 +780,11 @@ async function loadLogs(){
       host.appendChild(renderLogBlock({id:id,name:id,cols:["Date","Weight","Set","Reps"]},logModel[id]));
     });
   }
-  if(notesText){
+  if(logNotesText){
     host.appendChild(el("p","dayhdr","Client notes for you"));
-    host.appendChild(el("p",null,notesText));
+    host.appendChild(el("p",null,logNotesText));
   }
+  updateLogHistBtns();
 }
 function renderLogBlock(ex,rows){
   var block=el("div","exblock");
@@ -752,7 +820,7 @@ function renderLogBlock(ex,rows){
       else set(ni,c?c+", "+tk:tk); }
     function chip(label,on,fn){ var b=el("button","chip"+(on()?" on":""),label); b.type="button";
       b.addEventListener("mousedown",function(e){e.preventDefault();});
-      b.addEventListener("click",function(){ fn(); b.classList.toggle("on",on()); }); chiptd.appendChild(b); }
+      b.addEventListener("click",function(){ pushLogHistory(); fn(); b.classList.toggle("on",on()); }); chiptd.appendChild(b); }
     ["WU","bi","uni","ES","kg","lbs"].forEach(function(t){ chip(t,function(){return has(wi,t);},function(){tok(wi,t);}); });
     chip("L weaker",function(){return get(ni).indexOf("L weaker")>=0;},function(){note("L weaker");});
     chip("R weaker",function(){return get(ni).indexOf("R weaker")>=0;},function(){note("R weaker");});
@@ -775,6 +843,7 @@ function renderLogBlock(ex,rows){
       var dc=el("td"); var db=el("button","logdel","✕"); db.type="button"; db.title="Delete this entry";
       db.addEventListener("click",function(){
         if(!confirm("Delete this entry?"))return;
+        pushLogHistory();
         rows.splice(ri,1); logModel[ex.id]=rows; pushCoachRows(ex,rows); drawRows();
       });
       dc.appendChild(db); tr.appendChild(dc);
@@ -784,12 +853,13 @@ function renderLogBlock(ex,rows){
   drawRows();
   tb.addEventListener("focusin",function(e){
     var tr=e.target.closest("tr"); if(!tr||tr===chipbar||tr.dataset.ri===undefined) return;
-    if(e.target.isContentEditable){ chipbar.build(parseInt(tr.dataset.ri,10)); tr.after(chipbar); }
+    if(e.target.isContentEditable){ pushLogHistory(); chipbar.build(parseInt(tr.dataset.ri,10)); tr.after(chipbar); }
   });
   t.appendChild(tb); wrap.appendChild(t); block.appendChild(wrap);
   var actions=el("div","exactions");
   var add=el("button","addrow","+ Add entry"); add.type="button";
   add.addEventListener("click",function(){
+    pushLogHistory();
     var cells=cols.map(function(){return "";});
     var di=cols.indexOf("Date"); if(di>=0)cells[di]=todayMD();
     rows.push({cells:cells,by:"coach"}); logModel[ex.id]=rows;
@@ -800,6 +870,7 @@ function renderLogBlock(ex,rows){
   var same=el("button","addrow","Same as last time"); same.type="button";
   same.addEventListener("click",function(){
     if(!rows.length){ toast("No previous session to copy"); return; }
+    pushLogHistory();
     var di=cols.indexOf("Date"); if(di<0)di=0;
     var start=rows.length-1; while(start>0 && !(rows[start].cells[di]||"").trim()) start--;
     var copies=[];
@@ -808,6 +879,18 @@ function renderLogBlock(ex,rows){
     pushCoachRows(ex,rows); drawRows(); toast("Last session copied");
   });
   actions.appendChild(same);
+  var cpy=el("button","addrow","Copy"); cpy.type="button"; cpy.title="Copy this exercise's log as text";
+  cpy.addEventListener("click",function(){
+    var lines=[ex.name];
+    rows.forEach(function(r){
+      var line=r.cells.map(function(c,i){return c?(cols[i]||"").toLowerCase()+" "+c:"";}).filter(Boolean).join(" | ");
+      if(line)lines.push("  "+line);
+    });
+    var text=lines.join("\n");
+    if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(text).then(function(){toast("Copied");},function(){toast("Copy failed");}); }
+    else{ toast("Copy not supported"); }
+  });
+  actions.appendChild(cpy);
   block.appendChild(actions);
   return block;
 }
