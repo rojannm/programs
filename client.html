@@ -73,6 +73,16 @@ details.day.nomatch{display:none}
 .copybtn{font:inherit;font-size:.78rem;font-weight:600;color:var(--ink2);background:var(--bg2);
   border:1px solid var(--hair);border-radius:8px;padding:3px 10px;cursor:pointer;margin-top:6px}
 .copybtn:active{transform:scale(.97)}
+.flagbtn{flex:0 0 auto;border:0;background:none;color:var(--ink2);font-size:1.05rem;line-height:1;cursor:pointer;padding:2px 6px;border-radius:6px;opacity:.5}
+.flagbtn:hover{opacity:1}
+details.exercise.revisit .flagbtn{color:var(--danger);opacity:1}
+details.exercise.revisit > summary{background:rgba(192,57,43,.10)}
+details.exercise.revisit > summary h3{color:var(--danger)}
+.exnote-wrap{margin:2px 2px 12px}
+.exnote-lbl{font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);margin:0 0 4px}
+.exnote{min-height:38px;border:1px dashed var(--hair);border-radius:9px;padding:8px 10px;font:inherit;font-size:.9rem;color:var(--ink);background:var(--bg)}
+.exnote:empty::before{content:"Tap to add your own notes for this exercise…";color:var(--ink2)}
+.exnote:focus{outline:2px solid var(--accent);outline-offset:1px;border-style:solid}
 .btn:focus-visible,summary:focus-visible,[contenteditable]:focus-visible,.warmcheck:focus-visible,.chip:focus-visible{
   outline:2px solid var(--accent);outline-offset:2px}
 #syncpill{font-size:.8rem;color:var(--ink2);margin:0 0 12px;padding-left:4px;min-height:1.2em}
@@ -194,6 +204,7 @@ a{color:var(--accent);font-weight:600;text-underline-offset:3px}
       <button class="btn quiet" id="redoBtn" type="button" disabled>↷ Redo</button>
       <button class="btn quiet" id="expandAll" type="button">Expand all</button>
       <button class="btn quiet" id="collapseAll" type="button">Collapse all</button>
+      <button class="btn quiet" id="clearFlags" type="button">Clear highlights</button>
       <button class="btn quiet" id="themeBtn" type="button" title="Light / dark">☾</button>
     </div>
     <input type="search" id="exSearch" placeholder="Search exercises…" autocomplete="off">
@@ -389,6 +400,28 @@ async function fetchProgram(){
   var arr=await r.json();
   if(!arr.length) throw new Error("no program");
   return JSON.parse(arr[0].data);
+}
+var META={};
+async function pullMeta(){
+  if(!cloudEnabled()) return;
+  try{
+    var r=await fetch(sbUrl("/rest/v1/exercise_meta?client_slug=eq."+encodeURIComponent(SLUG)+"&select=*"),{headers:sbHeaders()});
+    if(!r.ok) return;
+    var data=await r.json(); META={};
+    data.forEach(function(e){ META[e.exercise_id]={note:e.client_note||"",revisit:!!e.revisit}; });
+  }catch(e){}
+}
+var metaTimers={};
+function saveMeta(exId){
+  if(!cloudEnabled()) return;
+  clearTimeout(metaTimers[exId]);
+  metaTimers[exId]=setTimeout(function(){
+    var m=META[exId]||{note:"",revisit:false};
+    fetch(sbUrl("/rest/v1/exercise_meta?on_conflict=client_slug,exercise_id"),{
+      method:"POST",headers:sbHeaders({"Prefer":"resolution=merge-duplicates,return=minimal"}),
+      body:JSON.stringify([{client_slug:SLUG,exercise_id:exId,client_note:m.note||"",revisit:!!m.revisit,updated_at:new Date().toISOString()}])
+    }).catch(function(){});
+  },500);
 }
 async function pullLogs(){
   var r=await fetch(sbUrl("/rest/v1/log_entries?client_slug=eq."+encodeURIComponent(SLUG)+
@@ -708,6 +741,7 @@ function build(){
       (day.exercises||[]).forEach(function(ex){
         exIndex[ex.id]=ex;
         var exd=el("details","exercise");
+        if(META[ex.id]&&META[ex.id].revisit) exd.classList.add("revisit");
         var esum=el("summary"); esum.appendChild(el("span","chev"));
         var h3=el("h3",null,ex.name);
         if(ex.struck)h3.classList.add("struck");
@@ -716,10 +750,35 @@ function build(){
         if(ss)esum.appendChild(el("span","sstag",ss));
         if(ex.demo)esum.appendChild(el("span","demotag","demo with Rojan"));
         if(ex.hl)esum.appendChild(el("span","coachtag","from Rojan"));
+        var flag=el("button","flagbtn","⚑"); flag.type="button";
+        flag.title="Mark to revisit (start here next time)";
+        flag.setAttribute("aria-label","Mark to revisit");
+        flag.addEventListener("click",function(e){
+          e.preventDefault(); e.stopPropagation();
+          META[ex.id]=META[ex.id]||{note:"",revisit:false};
+          META[ex.id].revisit=!META[ex.id].revisit;
+          exd.classList.toggle("revisit",META[ex.id].revisit);
+          saveMeta(ex.id);
+          toast(META[ex.id].revisit?"Marked to revisit":"Cleared");
+        });
+        esum.appendChild(flag);
         exd.appendChild(esum);
         var ebody=el("div","ex-body");
         if(ex.note)ebody.appendChild(el("p","ex-note",ex.note));
         if(ex.label)ebody.appendChild(el("p","tbl-label",ex.label));
+        (function(){
+          var noteWrap=el("div","exnote-wrap");
+          var lbl=el("div","exnote-lbl","Your notes");
+          var nc=el("div","exnote"); nc.id="exnote-"+ex.id;
+          makeEditable(nc);
+          if(META[ex.id]&&META[ex.id].note) nc.textContent=META[ex.id].note;
+          nc.addEventListener("input",function(){
+            META[ex.id]=META[ex.id]||{note:"",revisit:false};
+            META[ex.id].note=nc.textContent; saveMeta(ex.id);
+          });
+          noteWrap.appendChild(lbl); noteWrap.appendChild(nc);
+          ebody.appendChild(noteWrap);
+        })();
         var tableHost=el("div");
         ebody.appendChild(tableHost); exd.appendChild(ebody);
         var rendered=false;
@@ -823,6 +882,12 @@ document.getElementById("collapseAll").addEventListener("click",function(){
 });
 document.getElementById("undoBtn").addEventListener("click",doUndo);
 document.getElementById("redoBtn").addEventListener("click",doRedo);
+document.getElementById("clearFlags").addEventListener("click",function(){
+  var any=false;
+  Object.keys(META).forEach(function(id){ if(META[id]&&META[id].revisit){ META[id].revisit=false; saveMeta(id); any=true; } });
+  document.querySelectorAll("details.exercise.revisit").forEach(function(x){ x.classList.remove("revisit"); });
+  toast(any?"Highlights cleared":"No highlights");
+});
 
 /* theme toggle (auto -> light -> dark, remembered) */
 function applyTheme(){
@@ -892,6 +957,7 @@ async function boot(){
       return;
     }
   }
+  try{ await pullMeta(); }catch(e){}
   build();
   try{
     await pullLogs();

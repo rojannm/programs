@@ -122,6 +122,11 @@ tr.chipbar td{background:var(--bg2);padding:6px 10px}
 .ordbtn{border:0;background:none;color:var(--ink2);font-size:.6rem;line-height:1;cursor:pointer;padding:2px 3px}
 .ordbtn:hover:not(:disabled){color:var(--accent)}
 .ordbtn:disabled{opacity:.25;cursor:default}
+.flagbtn{border:0;background:none;color:var(--ink2);font-size:1rem;line-height:1;cursor:pointer;padding:0 6px;opacity:.5;vertical-align:middle}
+.flagbtn:hover{opacity:1}
+.exblock.revisit .flagbtn{color:var(--danger);opacity:1}
+.exblock.revisit h3{color:var(--danger)}
+.exblock.revisit{border-left:3px solid var(--danger);padding-left:8px;border-radius:4px}
 #toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(80px);
   background:var(--ink);color:var(--bg);padding:10px 20px;border-radius:999px;font-size:.9rem;
   font-weight:600;opacity:0;transition:all .25s ease;pointer-events:none;z-index:50;white-space:nowrap}
@@ -681,6 +686,23 @@ function renderProgramEditor(){
 }
 
 /* ---------- logs tab ---------- */
+var coachMeta={};
+async function loadMeta(){
+  coachMeta={};
+  try{
+    var r=await fetch(url("/rest/v1/exercise_meta?client_slug=eq."+esc(currentSlug)+"&select=*"),{headers:headers()});
+    if(r.ok){ (await r.json()).forEach(function(e){ coachMeta[e.exercise_id]={note:e.client_note||"",revisit:!!e.revisit}; }); }
+  }catch(e){}
+}
+function setRevisit(exId,val){
+  coachMeta[exId]=coachMeta[exId]||{note:"",revisit:false};
+  coachMeta[exId].revisit=val;
+  /* omit client_note so we never clobber the client's own note */
+  fetch(url("/rest/v1/exercise_meta?on_conflict=client_slug,exercise_id"),{
+    method:"POST",headers:headers({"Prefer":"resolution=merge-duplicates,return=minimal"}),
+    body:JSON.stringify([{client_slug:currentSlug,exercise_id:exId,revisit:val,updated_at:new Date().toISOString()}])
+  }).catch(function(){});
+}
 function exById(){
   var map={};
   (prog.cycles||[]).forEach(function(cy){
@@ -692,6 +714,7 @@ function exById(){
 }
 async function loadLogs(){
   var host=$("tab-logs"); host.textContent="Loading…";
+  await loadMeta();
   var r=await fetch(url("/rest/v1/log_entries?client_slug=eq."+esc(currentSlug)+
     "&select=*&order=exercise_id.asc,row_index.asc"),{headers:headers()});
   if(!r.ok){ host.textContent="Could not load logs."; return; }
@@ -743,7 +766,16 @@ function renderLogsBody(){
   var bar=el("div"); bar.style.cssText="display:flex;gap:6px;margin:0 0 8px";
   var ub=el("button","btn small","↶ Undo"); ub.type="button"; ub.id="logUndoBtn"; ub.disabled=!lUndo.length; ub.addEventListener("click",logUndo);
   var rb=el("button","btn small","↷ Redo"); rb.type="button"; rb.id="logRedoBtn"; rb.disabled=!lRedo.length; rb.addEventListener("click",logRedo);
-  bar.appendChild(ub); bar.appendChild(rb); host.appendChild(bar);
+  bar.appendChild(ub); bar.appendChild(rb);
+  var clr=el("button","btn small","Clear revisit flags"); clr.type="button";
+  clr.addEventListener("click",function(){
+    var any=false;
+    Object.keys(coachMeta).forEach(function(id){ if(coachMeta[id]&&coachMeta[id].revisit){ setRevisit(id,false); any=true; } });
+    host.querySelectorAll(".exblock.revisit").forEach(function(b){ b.classList.remove("revisit"); });
+    toast(any?"Flags cleared":"No flags");
+  });
+  bar.appendChild(clr);
+  host.appendChild(bar);
   var search=document.createElement("input"); search.type="search"; search.id="logSearch";
   search.placeholder="Search exercises…";
   search.addEventListener("input",function(){
@@ -788,7 +820,16 @@ function renderLogsBody(){
 }
 function renderLogBlock(ex,rows){
   var block=el("div","exblock");
+  if(coachMeta[ex.id]&&coachMeta[ex.id].revisit) block.classList.add("revisit");
   var h=el("h3",null,ex.name);
+  var flag=el("button","flagbtn","⚑"); flag.type="button"; flag.title="Mark to revisit (didn't get to it)";
+  flag.addEventListener("click",function(){
+    var now=!(coachMeta[ex.id]&&coachMeta[ex.id].revisit);
+    setRevisit(ex.id,now);
+    block.classList.toggle("revisit",now);
+    toast(now?"Marked to revisit":"Cleared");
+  });
+  h.appendChild(flag);
   var latest=rows.reduce(function(m,x){return (x.when&&(!m||x.when>m))?x.when:m;},null);
   if(latest){
     var d=new Date(latest);
