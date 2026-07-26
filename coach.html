@@ -127,6 +127,12 @@ tr.chipbar td{background:var(--bg2);padding:6px 10px}
 .exblock.revisit .flagbtn{color:var(--danger);opacity:1}
 .exblock.revisit h3{color:var(--danger)}
 .exblock.revisit{border-left:3px solid var(--danger);padding-left:8px;border-radius:4px}
+.badge{display:inline-block;min-width:16px;height:16px;line-height:16px;font-size:.62rem;font-weight:800;
+  background:var(--danger);color:#fff;border-radius:999px;padding:0 5px;margin-left:5px;vertical-align:middle}
+.msgcard{border:1px solid var(--hair);border-left:3px solid var(--accent);border-radius:10px;padding:10px 12px;margin:8px 0;background:var(--card)}
+.msgcard.resolved{border-left-color:var(--hair);opacity:.6}
+.msgmeta{font-size:.72rem;color:var(--ink2);margin-bottom:4px}
+.msgbody{font-size:.92rem;white-space:pre-wrap;margin-bottom:8px}
 #toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(80px);
   background:var(--ink);color:var(--bg);padding:10px 20px;border-radius:999px;font-size:.9rem;
   font-weight:600;opacity:0;transition:all .25s ease;pointer-events:none;z-index:50;white-space:nowrap}
@@ -178,11 +184,15 @@ tr.chipbar td{background:var(--bg2);padding:6px 10px}
     <div class="tabs">
       <button class="tab on" data-tab="program" type="button">Program</button>
       <button class="tab" data-tab="logs" type="button">Logs</button>
+      <button class="tab" data-tab="messages" type="button">Messages<span id="msgBadge" class="badge" style="display:none"></span></button>
+      <button class="tab" data-tab="nutrition" type="button">Nutrition</button>
       <button class="tab" data-tab="private" type="button">Private</button>
       <button class="tab" data-tab="access" type="button">Access</button>
     </div>
     <div id="tab-program"></div>
     <div id="tab-logs" style="display:none"></div>
+    <div id="tab-messages" style="display:none"></div>
+    <div id="tab-nutrition" style="display:none"></div>
     <div id="tab-private" style="display:none"></div>
     <div id="tab-access" style="display:none"></div>
   </div>
@@ -299,6 +309,7 @@ async function selectClient(slug){
   $("clientCard").style.display="";
   $("clientTitle").textContent=slug;
   showTab("program");
+  updateMsgBadge();
   await loadProgram();
   renderProgramEditor();
 }
@@ -307,10 +318,12 @@ document.querySelectorAll(".tab").forEach(function(t){
 });
 function showTab(name){
   document.querySelectorAll(".tab").forEach(function(t){ t.classList.toggle("on",t.dataset.tab===name); });
-  ["program","logs","private","access"].forEach(function(n){
+  ["program","logs","messages","nutrition","private","access"].forEach(function(n){
     $("tab-"+n).style.display=(n===name)?"":"none";
   });
   if(name==="logs")loadLogs();
+  if(name==="messages")loadMessages();
+  if(name==="nutrition")loadNutrition();
   if(name==="private")loadPrivate();
   if(name==="access")renderAccess();
 }
@@ -981,6 +994,72 @@ async function loadPrivate(){
         toast("Private notes saved");
       }catch(e){ toast("Save failed"); }
     },900);
+  });
+}
+
+/* ---------- nutrition tab ---------- */
+var nutTimer=null;
+async function loadNutrition(){
+  var host=$("tab-nutrition"); host.textContent="";
+  host.appendChild(el("p","note","Homework, guidance, links to papers or research. The client sees this on their page (read-only) under Nutrition."));
+  var ta=document.createElement("textarea"); ta.style.minHeight="220px";
+  ta.placeholder="e.g. Aim 140g protein/day. Article: https://…  Homework: log meals for 3 days.";
+  host.appendChild(ta);
+  var r=await fetch(url("/rest/v1/client_nutrition?client_slug=eq."+esc(currentSlug)+"&select=content"),{headers:headers()});
+  var arr=r.ok?await r.json():[];
+  ta.value=arr.length?arr[0].content:"";
+  ta.addEventListener("input",function(){
+    clearTimeout(nutTimer);
+    nutTimer=setTimeout(async function(){
+      try{
+        var r2=await fetch(url("/rest/v1/client_nutrition?on_conflict=client_slug"),{
+          method:"POST",headers:headers({"Prefer":"resolution=merge-duplicates,return=minimal"}),
+          body:JSON.stringify([{client_slug:currentSlug,content:ta.value,updated_at:new Date().toISOString()}])});
+        if(!r2.ok)throw new Error();
+        toast("Nutrition saved");
+      }catch(e){ toast("Save failed"); }
+    },900);
+  });
+}
+
+/* ---------- messages tab (client notes to you) ---------- */
+async function fetchMessages(){
+  var r=await fetch(url("/rest/v1/client_messages?client_slug=eq."+esc(currentSlug)+"&select=*&order=created_at.desc"),{headers:headers()});
+  return r.ok?await r.json():[];
+}
+async function updateMsgBadge(){
+  try{
+    var msgs=await fetchMessages();
+    var open=msgs.filter(function(m){return !m.resolved;}).length;
+    var b=$("msgBadge");
+    if(b){ b.textContent=open||""; b.style.display=open?"":"none"; }
+  }catch(e){}
+}
+async function loadMessages(){
+  var host=$("tab-messages"); host.textContent="Loading…";
+  var msgs=await fetchMessages();
+  host.textContent="";
+  host.appendChild(el("p","note","Notes your client sent you. Unresolved ones are highlighted. Mark resolved once you've actioned them."));
+  if(!msgs.length){ host.appendChild(el("p","note","No messages yet.")); return; }
+  msgs.forEach(function(m){
+    var card=el("div","msgcard"+(m.resolved?" resolved":""));
+    var when=new Date(m.created_at);
+    card.appendChild(el("div","msgmeta",(when.getMonth()+1)+"/"+when.getDate()+" "+when.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})+(m.resolved?" · resolved":"")));
+    card.appendChild(el("div","msgbody",m.body));
+    if(!m.resolved){
+      var btn=el("button","btn small","Mark resolved"); btn.type="button";
+      btn.addEventListener("click",async function(){
+        try{
+          var r=await fetch(url("/rest/v1/client_messages?id=eq."+m.id),{
+            method:"PATCH",headers:headers({"Prefer":"return=minimal"}),
+            body:JSON.stringify({resolved:true})});
+          if(!r.ok)throw new Error();
+          loadMessages(); updateMsgBadge();
+        }catch(e){ toast("Failed"); }
+      });
+      card.appendChild(btn);
+    }
+    host.appendChild(card);
   });
 }
 

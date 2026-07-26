@@ -83,6 +83,15 @@ details.exercise.revisit > summary h3{color:var(--danger)}
 .exnote{min-height:38px;border:1px dashed var(--hair);border-radius:9px;padding:8px 10px;font:inherit;font-size:.9rem;color:var(--ink);background:var(--bg)}
 .exnote:empty::before{content:"Tap to add your own notes for this exercise…";color:var(--ink2)}
 .exnote:focus{outline:2px solid var(--accent);outline-offset:1px;border-style:solid}
+.nutrition-content{white-space:pre-wrap;font-size:.94rem;line-height:1.5}
+.sentmsg{font-size:.84rem;color:var(--ink2);margin:4px 0}
+.sentmsg.resolved{color:var(--good)}
+html.flatmode{font-size:15px}
+html.flatmode .flatlist > details.exercise > summary h3{color:var(--pt-ink)}
+html.flatmode details.section > summary h2{color:var(--accent)}
+.nonneg-inline{border:1px solid var(--hair);border-radius:10px;padding:8px 12px;margin:0 0 10px;background:var(--bg2)}
+.nonneg-lbl{font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--danger);margin-bottom:4px}
+.nonneg-item{font-size:.9rem;margin:3px 0}
 .flatlist{background:var(--card);border:1px solid var(--hair);border-radius:14px;box-shadow:var(--shadow);margin-bottom:12px}
 .flatlist details.exercise > summary{padding:12px 14px}
 .donebox{flex:0 0 auto;width:24px;height:24px;border-radius:7px;border:2px solid var(--ink2);background:none;cursor:pointer;padding:0;position:relative}
@@ -480,6 +489,38 @@ function mdToIso(s){
   if(d> now) d=new Date(y-1,mo-1,da);
   return d.getFullYear()+"-"+String(mo).padStart(2,"0")+"-"+String(da).padStart(2,"0");
 }
+var NUTRITION="";
+async function pullNutrition(){
+  if(!cloudEnabled()) return;
+  try{
+    var r=await fetch(sbUrl("/rest/v1/client_nutrition?client_slug=eq."+encodeURIComponent(SLUG)+"&select=content"),{headers:sbHeaders()});
+    if(r.ok){ var a=await r.json(); NUTRITION=a.length?(a[0].content||""):""; }
+  }catch(e){}
+}
+async function fetchMyMessages(){
+  if(!cloudEnabled()) return [];
+  try{
+    var r=await fetch(sbUrl("/rest/v1/client_messages?client_slug=eq."+encodeURIComponent(SLUG)+"&select=*&order=created_at.desc"),{headers:sbHeaders()});
+    return r.ok?await r.json():[];
+  }catch(e){ return []; }
+}
+async function sendMessage(body){
+  if(!cloudEnabled()) return false;
+  try{
+    var r=await fetch(sbUrl("/rest/v1/client_messages"),{method:"POST",headers:sbHeaders({"Prefer":"return=minimal"}),
+      body:JSON.stringify([{client_slug:SLUG,body:body}])});
+    return r.ok;
+  }catch(e){ return false; }
+}
+function linkify(text){
+  var frag=document.createDocumentFragment();
+  var parts=(text||"").split(/(https?:\/\/[^\s]+)/g);
+  parts.forEach(function(p){
+    if(/^https?:\/\//.test(p)){ var a=document.createElement("a"); a.href=p; a.target="_blank"; a.rel="noopener"; a.textContent=p; frag.appendChild(a); }
+    else frag.appendChild(document.createTextNode(p));
+  });
+  return frag;
+}
 var metaTimers={};
 function saveMeta(exId){
   if(!cloudEnabled()) return;
@@ -757,22 +798,24 @@ function build(){
   content.textContent="";
   exIndex={};
 
-  var keys=el("details","section"); keys.id="sec-keys";
-  var ksum=el("summary"); ksum.appendChild(el("span","chev"));
-  var kh=el("h2",null,"How to read this program"); ksum.appendChild(kh);
-  keys.appendChild(ksum);
-  var kbody=el("div","section-body keys");
-  kbody.innerHTML='<p>If you don’t get to all of it, that’s not detrimental. As many as you can on a day is what I care about.</p>'+
-    '<p><span class="k">3x12</span> means 3 sets of 12 repetitions.</p>'+
-    '<p><span class="k">1/2 exercise A</span> and <span class="k">2/2 exercise B</span> is a superset: do A, then B right after, no rest between.</p>'+
-    '<p>An orange <span class="k">demo</span> tag means Rojan shows you first before you try it.</p>'+
-    '<p>A blue <span class="k">from Rojan</span> tag or a blue-tinted row means your coach added or changed it since you last trained.</p>'+
-    '<p>Tap an exercise to open its log, tap a cell to edit. <span class="k">Add entry</span> starts a row with today’s date. <span class="k">Same as last time</span> repeats your last session. The <span class="k">WU</span> and <span class="k">L/R weaker</span> chips under the row you’re in add those notes with one tap.</p>';
-  keys.appendChild(kbody);
-  content.appendChild(keys);
-  trackOpen(keys,"sec:keys");
+  if(!PROG.flat){
+    var keys=el("details","section"); keys.id="sec-keys";
+    var ksum=el("summary"); ksum.appendChild(el("span","chev"));
+    var kh=el("h2",null,"How to read this program"); ksum.appendChild(kh);
+    keys.appendChild(ksum);
+    var kbody=el("div","section-body keys");
+    kbody.innerHTML='<p>If you don’t get to all of it, that’s not detrimental. As many as you can on a day is what I care about.</p>'+
+      '<p><span class="k">3x12</span> means 3 sets of 12 repetitions.</p>'+
+      '<p><span class="k">1/2 exercise A</span> and <span class="k">2/2 exercise B</span> is a superset: do A, then B right after, no rest between.</p>'+
+      '<p>An orange <span class="k">demo</span> tag means Rojan shows you first before you try it.</p>'+
+      '<p>A blue <span class="k">from Rojan</span> tag or a blue-tinted row means your coach added or changed it since you last trained.</p>'+
+      '<p>Tap an exercise to open its log, tap a cell to edit. <span class="k">Add entry</span> starts a row with today’s date. <span class="k">Same as last time</span> repeats your last session. The <span class="k">WU</span> and <span class="k">L/R weaker</span> chips under the row you’re in add those notes with one tap.</p>';
+    keys.appendChild(kbody);
+    content.appendChild(keys);
+    trackOpen(keys,"sec:keys");
+  }
 
-  if(PROG.flat){ buildFlat(content); appendDiscuss(content); return; }
+  if(PROG.flat){ buildFlat(content); appendNutrition(content); appendDiscuss(content); return; }
 
   if(PROG.warmups&&PROG.warmups.length){
     var warm=el("details","section");
@@ -885,6 +928,7 @@ function build(){
     content.appendChild(sec);
   });
 
+  appendNutrition(content);
   appendDiscuss(content);
 }
 function appendDiscuss(content){
@@ -902,11 +946,49 @@ function appendDiscuss(content){
     schedulePush(); scheduleLocalSave();
   });
   dbody.appendChild(fn);
+  if(!PROG.flat){
+    var sendRow=el("div"); sendRow.style.marginTop="8px";
+    var sendBtn=el("button","btn","Send to Rojan"); sendBtn.type="button";
+    var sentList=el("div"); sentList.style.marginTop="8px";
+    function renderSent(){
+      fetchMyMessages().then(function(msgs){
+        sentList.textContent="";
+        msgs.slice(0,8).forEach(function(m){
+          var line=el("p","sentmsg"+(m.resolved?" resolved":""));
+          var w=new Date(m.created_at);
+          line.textContent=(m.resolved?"✓ ":"• ")+(m.body.length>60?m.body.slice(0,60)+"…":m.body)+"  ("+(m.resolved?"resolved":"sent "+(w.getMonth()+1)+"/"+w.getDate())+")";
+          sentList.appendChild(line);
+        });
+      });
+    }
+    sendBtn.addEventListener("click",function(){
+      var body=(fn.textContent||"").trim();
+      if(!body){ toast("Write a note first"); return; }
+      sendBtn.disabled=true;
+      sendMessage(body).then(function(ok){
+        sendBtn.disabled=false;
+        toast(ok?"Sent to Rojan":"Send failed, try again");
+        if(ok) renderSent();
+      });
+    });
+    sendRow.appendChild(sendBtn); dbody.appendChild(sendRow); dbody.appendChild(sentList);
+    renderSent();
+  }
   disc.appendChild(dbody);
   content.appendChild(disc);
   trackOpen(disc,"sec:discuss");
   document.getElementById("footnote").textContent=
     "Everything saves automatically and syncs. If you are offline it saves on your device and syncs later.";
+}
+function appendNutrition(content){
+  if(!NUTRITION || !NUTRITION.trim()) return;
+  var sec=el("details","section"); sec.id="sec-nutrition";
+  var sm=el("summary"); sm.appendChild(el("span","chev")); sm.appendChild(el("h2",null,"Nutrition"));
+  sec.appendChild(sm);
+  var b=el("div","section-body");
+  var p=el("div","nutrition-content"); p.appendChild(linkify(NUTRITION));
+  b.appendChild(p); sec.appendChild(b); content.appendChild(sec);
+  trackOpen(sec,"sec:nutrition");
 }
 function refreshAllOpenTables(){
   document.querySelectorAll("details.exercise").forEach(function(d){ if(d.rerender)d.rerender(); });
@@ -1005,19 +1087,14 @@ function updateOverdue(){
     else b.style.display="none";
   }
 }
+function flatSortKey(name){ return (name||"").replace(/^\d+\/\d+\s+/,"").toLowerCase().trim(); }
 function buildFlat(content){
+  document.documentElement.classList.add("flatmode");
   flatNodes={};
   var list=allFlatExercises();
   list.forEach(function(ex){ exIndex[ex.id]=ex; if(ex.variants) ex.variants.forEach(function(v){ exIndex[v.id]=v; }); });
+  list.sort(function(a,b){ var ka=flatSortKey(a.name), kb=flatSortKey(b.name); return ka<kb?-1:ka>kb?1:0; });
 
-  if(PROG.nonneg && PROG.nonneg.length){
-    var nn=el("details","section"); var ns=el("summary"); ns.appendChild(el("span","chev"));
-    ns.appendChild(el("h2",null,"Non-negotiables")); ns.appendChild(el("span","count",String(PROG.nonneg.length)));
-    nn.appendChild(ns);
-    var nb=el("div","section-body"); var ul=el("ul","warm");
-    PROG.nonneg.forEach(function(t){ var li=el("li"); li.appendChild(el("span","warmtext",t)); ul.appendChild(li); });
-    nb.appendChild(ul); nn.appendChild(nb); content.appendChild(nn); trackOpen(nn,"sec:nonneg");
-  }
   var banner=el("div","overdue-banner"); banner.id="overdueBanner"; banner.style.display="none";
   banner.addEventListener("click",function(){
     var first=document.querySelector("details.exercise.overdue");
@@ -1033,6 +1110,13 @@ function buildFlat(content){
 
   var flat=el("div","flatlist section");
   flat.style.cssText="overflow:hidden";
+  if(PROG.nonneg && PROG.nonneg.length){
+    var nnWrap=el("div","nonneg-inline");
+    nnWrap.appendChild(el("div","nonneg-lbl","Non-negotiables"));
+    PROG.nonneg.slice().sort(function(a,b){var la=(a||"").toLowerCase(),lb=(b||"").toLowerCase();return la<lb?-1:la>lb?1:0;})
+      .forEach(function(t){ var row=el("div","nonneg-item"); row.textContent=t; nnWrap.appendChild(row); });
+    flat.appendChild(nnWrap);
+  }
   list.forEach(function(ex){ flat.appendChild(renderExerciseFlat(ex)); });
   content.appendChild(flat);
 
@@ -1158,6 +1242,7 @@ async function boot(){
     }
   }
   try{ await pullMeta(); }catch(e){}
+  try{ await pullNutrition(); }catch(e){}
   if(PROG.flat){ try{ await pullSessions(); }catch(e){} }
   build();
   try{
