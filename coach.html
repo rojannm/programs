@@ -4,45 +4,54 @@
 <meta charset="utf-8">
 <title>Coach Tools</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-:root{
-  --bg:#ffffff; --bg2:#f7f7f5; --card:#ffffff;
-  --ink:#1c1c1e; --ink2:#6d6d72; --hair:#e5e5ea;
-  --accent:#d99a06; --accent-soft:#fdf3d7;
-  --coach:#0a63c2; --coach-soft:#e8f2fd;
-  --good:#177537; --danger:#c0392b;
-  --shadow:0 1px 2px rgba(0,0,0,.05);
+:root, :root[data-theme="paper"], :root[data-theme="light"]{
+  --bg:#FBF6EC; --bg2:#EFE7D6; --card:#FBF6EC; --inset:#F4EDDF;
+  --ink:#231F1A; --ink2:#8E8474; --hair:#DFD4C0; --hair-soft:#E8DECC;
+  --green:#33432F; --accent:#8A2B37; --accent-soft:#EEDDD7;
+  --demo:#B0642A; --demo-soft:#F1E2D0; --coach:#3B6EA5; --coach-soft:#E4EDF5;
+  --pt-ink:#8A2B37; --self-ink:#33432F; --good:#3E6B4A; --danger:#8A2B37;
+  --shadow:0 8px 22px rgba(60,45,25,.05); --grain:.05;
+}
+:root[data-theme="ivory"]{
+  --bg:#FFFFFF; --bg2:#F6F3EC; --card:#FFFFFF; --inset:#F7F3EA;
+  --ink:#221F1B; --ink2:#8B8474; --hair:#E7E0D3; --hair-soft:#EFE9DE;
+  --green:#33432F; --accent:#8A2B37; --accent-soft:#F1E2DC;
+  --demo:#B0642A; --demo-soft:#F3E7D8; --coach:#3B6EA5; --coach-soft:#E7EFF6;
+  --pt-ink:#8A2B37; --self-ink:#33432F; --good:#3E6B4A; --danger:#8A2B37;
+  --shadow:0 6px 18px rgba(60,50,30,.05); --grain:.03;
+}
+:root[data-theme="night"], :root[data-theme="dark"]{
+  --bg:#221F18; --bg2:#1A1813; --card:#221F18; --inset:#2A251B;
+  --ink:#EFE6D4; --ink2:#938974; --hair:#37311F; --hair-soft:#302B1E;
+  --green:#A7BA96; --accent:#D0808B; --accent-soft:#3A2A2C;
+  --demo:#E0A15A; --demo-soft:#3A2E1C; --coach:#8FB6DE; --coach-soft:#1E2C3A;
+  --pt-ink:#D0808B; --self-ink:#A7BA96; --good:#8FBF9A; --danger:#D0808B;
+  --shadow:0 8px 22px rgba(0,0,0,.28); --grain:.04;
 }
 @media (prefers-color-scheme: dark){
-  :root{
-    --bg:#1c1c1e; --bg2:#141415; --card:#242426;
-    --ink:#f2f2f4; --ink2:#98989e; --hair:#39393d;
-    --accent:#e6b345; --accent-soft:#3a3110;
-    --coach:#8ec8ff; --coach-soft:#16324c;
-    --good:#8fdda4; --danger:#ff7a6b; --shadow:none;
+  :root:not([data-theme]){
+    --bg:#221F18; --bg2:#1A1813; --card:#221F18; --inset:#2A251B;
+    --ink:#EFE6D4; --ink2:#938974; --hair:#37311F; --hair-soft:#302B1E;
+    --green:#A7BA96; --accent:#D0808B; --accent-soft:#3A2A2C;
+    --demo:#E0A15A; --demo-soft:#3A2E1C; --coach:#8FB6DE; --coach-soft:#1E2C3A;
+    --pt-ink:#D0808B; --self-ink:#A7BA96; --good:#8FBF9A; --danger:#D0808B;
+    --shadow:0 8px 22px rgba(0,0,0,.28); --grain:.04;
   }
-}
-:root[data-theme="light"]{
-  --bg:#ffffff; --bg2:#f7f7f5; --card:#ffffff;
-  --ink:#1c1c1e; --ink2:#6d6d72; --hair:#e5e5ea;
-  --accent:#d99a06; --accent-soft:#fdf3d7;
-  --coach:#0a63c2; --coach-soft:#e8f2fd;
-  --good:#177537; --danger:#c0392b; --shadow:0 1px 2px rgba(0,0,0,.05);
-}
-:root[data-theme="dark"]{
-  --bg:#1c1c1e; --bg2:#141415; --card:#242426;
-  --ink:#f2f2f4; --ink2:#98989e; --hair:#39393d;
-  --accent:#e6b345; --accent-soft:#3a3110;
-  --coach:#8ec8ff; --coach-soft:#16324c;
-  --good:#8fdda4; --danger:#ff7a6b; --shadow:none;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  background:var(--bg2);color:var(--ink);line-height:1.45}
+body{font-family:"Hanken Grotesk",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  color:var(--ink);line-height:1.5;
+  background-color:var(--bg2);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");}
 .wrap{max-width:820px;margin:0 auto;padding:20px 16px 96px}
-h1{font-size:1.6rem;font-weight:800;letter-spacing:-.02em;margin:18px 0 4px}
-.sub{color:var(--ink2);font-size:.95rem;margin:0 0 18px}
+h1{font-family:"Fraunces",Georgia,serif;font-size:2rem;font-weight:500;letter-spacing:-.01em;margin:18px 0 4px;color:var(--ink)}
+.card h2{font-family:"Fraunces",Georgia,serif}
+.sub{color:var(--green);font-size:.95rem;margin:0 0 18px}
 .card{background:var(--card);border:1px solid var(--hair);border-radius:14px;
   margin-bottom:14px;box-shadow:var(--shadow);padding:16px}
 .card h2{font-size:1.05rem;font-weight:700;margin:0 0 10px}
@@ -76,6 +85,8 @@ textarea{min-height:120px;resize:vertical}
 .cyhead input[type=text]{flex:1;min-width:160px}
 .dayblock{border:1px solid var(--hair);border-radius:10px;margin:10px 0;padding:10px;background:var(--card)}
 .dayhead{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+.daycolor{display:inline-flex;align-items:center;gap:5px}
+.daycolor input[type=color]{width:32px;height:30px;padding:2px;border:1px solid var(--hair);border-radius:8px;background:var(--card);cursor:pointer}
 .dayhead input[type=text]{flex:1;min-width:110px}
 .dayhead select{width:auto}
 .exlist{min-height:14px;border-radius:8px}
@@ -492,13 +503,25 @@ function renderProgramEditor(){
       dh.appendChild(textInput(day.title,"Day title",function(v){day.title=v;}));
       dh.appendChild(textInput(day.tag,"tag e.g. PT with Rojan",function(v){day.tag=v;}));
       var sel=document.createElement("select");
-      [["pt","Blue (PT)"],["self","Pink (self)"],["green","Green"],["purple","Purple"],["orange","Orange"],["teal","Teal"],["gray","Gray"]].forEach(function(o){
+      [["pt","Cherry (PT)"],["self","Green (self)"],["green","Sage"],["purple","Purple"],["orange","Amber"],["teal","Teal"],["gray","Gray"]].forEach(function(o){
         var op=document.createElement("option"); op.value=o[0]; op.textContent=o[1];
         if(day.type===o[0])op.selected=true; sel.appendChild(op);
       });
       sel.style.width="auto";
       sel.addEventListener("change",function(){ day.type=sel.value; saveProgramSoon(); });
       dh.appendChild(sel);
+      /* custom day colour override */
+      var cwrap=el("span","daycolor");
+      var cin=document.createElement("input"); cin.type="color";
+      cin.value=day.color||"#8A2B37"; cin.title="Custom day colour";
+      cin.addEventListener("input",function(){ day.color=cin.value; saveProgramSoon(); });
+      cwrap.appendChild(cin);
+      if(day.color){
+        var cx=el("button","btn small","× colour"); cx.type="button"; cx.title="Use the preset colour instead";
+        cx.addEventListener("click",function(){ delete day.color; saveProgramSoon(); renderProgramEditor(); });
+        cwrap.appendChild(cx);
+      }
+      dh.appendChild(cwrap);
       var delD=el("button","btn small danger","✕ day"); delD.type="button";
       delD.addEventListener("click",function(){
         if(!confirm("Remove "+(day.title||"this day")+" and its exercises from the program?"))return;
@@ -1347,16 +1370,21 @@ $("importFile").addEventListener("change",function(){
   this.value="";
 });
 
-function applyTheme(){
+var THEMES=["paper","ivory","night"];
+var THEME_ICON={paper:"◐ Paper",ivory:"○ Ivory",night:"● Night"};
+function currentTheme(){
   var t=null; try{ t=localStorage.getItem("theme"); }catch(e){}
-  var root=document.documentElement;
-  if(t==="light"||t==="dark"){ root.setAttribute("data-theme",t); } else { root.removeAttribute("data-theme"); }
-  var dark = t==="dark" || (t!=="light" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
-  var b=$("themeBtn"); if(b) b.textContent = dark ? "☀" : "☾";
+  if(t==="light")t="paper"; if(t==="dark")t="night";
+  return THEMES.indexOf(t)>=0 ? t : null;
+}
+function applyTheme(){
+  var t=currentTheme(), root=document.documentElement;
+  if(t){ root.setAttribute("data-theme",t); } else { root.removeAttribute("data-theme"); }
+  var b=$("themeBtn");
+  if(b){ var shown=t||((window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches)?"night":"paper"); b.textContent=THEME_ICON[shown]; }
 }
 $("themeBtn").addEventListener("click",function(){
-  var cur=null; try{ cur=localStorage.getItem("theme"); }catch(e){}
-  var next = cur==="dark" ? "light" : "dark";
+  var cur=currentTheme(), next=THEMES[(THEMES.indexOf(cur)+1)%THEMES.length];
   try{ localStorage.setItem("theme",next); }catch(e){}
   applyTheme();
 });
