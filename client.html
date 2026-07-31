@@ -74,9 +74,15 @@ header.top .sub{color:var(--ink2);font-size:.95rem;margin:0}
 .btn:active{transform:scale(.97)}
 .btn.quiet{color:var(--ink2);font-weight:500}
 .btn:disabled{opacity:.4;cursor:default}
+.searchwrap{position:relative;margin:2px 0 4px}
 #exSearch{width:100%;font:inherit;font-size:.92rem;color:var(--ink);background:var(--card);
-  border:1px solid var(--hair);border-radius:999px;padding:9px 16px;margin:2px 0 4px}
+  border:1px solid var(--hair);border-radius:999px;padding:9px 40px 9px 16px}
+#exSearch::-webkit-search-cancel-button{display:none}
 #exSearch:focus{outline:2px solid var(--accent);outline-offset:1px}
+#exSearchClear{position:absolute;right:6px;top:50%;transform:translateY(-50%);display:none;
+  width:26px;height:26px;border:0;border-radius:50%;background:var(--bg2);color:var(--ink2);
+  font-size:1.1rem;line-height:1;cursor:pointer;padding:0}
+#exSearchClear.show{display:block}
 details.exercise.nomatch{display:none}
 details.day.nomatch{display:none}
 .copybtn{font:inherit;font-size:.78rem;font-weight:600;color:var(--ink2);background:var(--bg2);
@@ -226,7 +232,10 @@ a{color:var(--accent);font-weight:600;text-underline-offset:3px}
       <button class="btn quiet" id="clearFlags" type="button">Clear highlights</button>
       <button class="btn quiet" id="themeBtn" type="button" title="Light / dark">☾</button>
     </div>
-    <input type="search" id="exSearch" placeholder="Search exercises…" autocomplete="off">
+    <div class="searchwrap">
+      <input type="search" id="exSearch" placeholder="Search exercises…" autocomplete="off">
+      <button type="button" id="exSearchClear" aria-label="Clear search">×</button>
+    </div>
     <p id="syncpill"></p>
   </header>
   <div id="content"><div id="loadcard">Loading your program…</div></div>
@@ -744,7 +753,11 @@ function renderTable(ex,container){
     ensureOwned(ex.id);
     pushHistory();
     var blank=colsFor(ex).map(function(){return "";});
-    var di=colsFor(ex).indexOf("Date"); if(di>=0)blank[di]=todayMD();
+    var di=colsFor(ex).indexOf("Date");
+    if(di>=0){
+      var hasToday=store.rows[ex.id].some(function(r){return (r[di]||"")===todayMD();});
+      blank[di]=hasToday ? "-" : todayMD();
+    }
     store.rows[ex.id].push(blank);
     markDirty(ex.id); persist(false);
     renderTable(ex,container);
@@ -758,19 +771,31 @@ function renderTable(ex,container){
     var cur=rowsFor(ex);
     if(!cur.length){ toast("No previous session to copy"); return; }
     var di=colsFor(ex).indexOf("Date"); if(di<0)di=0;
-    var start=cur.length-1;
-    while(start>0 && !(cur[start][di]||"").trim()) start--;
-    var end=cur.length, copies=[];
-    for(var i=start;i<end;i++){
-      var c=cur[i].slice(); c[di]=(i===start)?todayMD():"";
-      copies.push(c);
+    var si=colsFor(ex).indexOf("Set");
+    var hasToday=cur.some(function(r){return (r[di]||"")===todayMD();});
+    var copies;
+    if(hasToday){
+      /* same-day: add one set, carry weight/reps, date "-", set number +1 */
+      var last=cur[cur.length-1].slice();
+      last[di]="-";
+      if(si>=0){ var m=(last[si]||"").match(/\d+/); last[si]= m ? String(parseInt(m[0],10)+1) : last[si]; }
+      copies=[last];
+    }else{
+      /* new session: copy the last logged session, first row gets today's date */
+      var start=cur.length-1;
+      while(start>0 && !(cur[start][di]||"").trim()) start--;
+      copies=[];
+      for(var i=start;i<cur.length;i++){
+        var c=cur[i].slice(); c[di]=(i===start)?todayMD():"-";
+        copies.push(c);
+      }
     }
     ensureOwned(ex.id);
     pushHistory();
     store.rows[ex.id]=store.rows[ex.id].concat(copies);
     markDirty(ex.id); persist(true);
     renderTable(ex,container);
-    toast("Last session copied for today");
+    toast(hasToday?"Next set added":"Last session copied for today");
   });
   actions.appendChild(same);
   var cpyEx=el("button","addrow quiet","Copy");
@@ -1202,8 +1227,8 @@ document.getElementById("themeBtn").addEventListener("click",function(){
 applyTheme();
 
 /* search / filter exercises */
-document.getElementById("exSearch").addEventListener("input",function(){
-  var q=this.value.trim().toLowerCase();
+function runExSearch(q){
+  q=(q||"").trim().toLowerCase();
   document.querySelectorAll("details.exercise").forEach(function(ex){
     var h=ex.querySelector("h3"); var m=!q || (h && h.textContent.toLowerCase().indexOf(q)>=0);
     ex.classList.toggle("nomatch",!m);
@@ -1213,6 +1238,11 @@ document.getElementById("exSearch").addEventListener("input",function(){
     var any=d.querySelector("details.exercise:not(.nomatch)");
     d.classList.toggle("nomatch", !!q && !any);
   });
+  document.getElementById("exSearchClear").classList.toggle("show", !!q);
+}
+document.getElementById("exSearch").addEventListener("input",function(){ runExSearch(this.value); });
+document.getElementById("exSearchClear").addEventListener("click",function(){
+  var s=document.getElementById("exSearch"); s.value=""; runExSearch(""); s.focus();
 });
 
 document.addEventListener("keydown",function(e){
@@ -1271,19 +1301,18 @@ async function boot(){
   },30000);
 }
 
-/* Recover from the browser suspending a long-idle tab (esp. iOS Safari):
-   the page can come back with its rendered content torn down. */
-window.addEventListener("pageshow",function(e){ if(e.persisted) location.reload(); });
+/* Recover only if the browser actually tore the page down (rare, iOS long-idle).
+   Do NOT reload on every lock/unlock — just quietly re-sync after a long time away. */
+function pageIntact(){ return !!document.querySelector("details.exercise, .flatlist, details.day, #loadcard"); }
+window.addEventListener("pageshow",function(e){ if(e.persisted && !pageIntact()) location.reload(); });
 var _hiddenAt=0;
 document.addEventListener("visibilitychange",function(){
   if(document.hidden){ _hiddenAt=Date.now(); return; }
-  if(_hiddenAt && Date.now()-_hiddenAt>60000){
-    if(!document.querySelector("details.day")){ location.reload(); return; }
-    if(typeof cloudEnabled==="function" && cloudEnabled()){
-      pullLogs().then(refreshAllOpenTables).catch(function(){});
-    }
+  var away=_hiddenAt?Date.now()-_hiddenAt:0; _hiddenAt=0;
+  if(!pageIntact()){ location.reload(); return; }
+  if(away>180000 && typeof cloudEnabled==="function" && cloudEnabled()){
+    pullLogs().then(refreshAllOpenTables).catch(function(){});
   }
-  _hiddenAt=0;
 });
 boot();
 })();

@@ -1390,6 +1390,19 @@ $("themeBtn").addEventListener("click",function(){
 });
 applyTheme();
 
+/* Cmd/Ctrl+Z undo, Shift for redo — routes to the active tab's history */
+document.addEventListener("keydown",function(e){
+  var k=(e.key||"").toLowerCase();
+  if((e.metaKey||e.ctrlKey)&&k==="z"){
+    var ae=document.activeElement;
+    if(ae && (ae.isContentEditable||ae.tagName==="INPUT"||ae.tagName==="TEXTAREA"||ae.tagName==="SELECT")) return;
+    var tabOn=document.querySelector(".tab.on");
+    var tab=tabOn?tabOn.dataset.tab:null;
+    if(tab==="logs"){ e.preventDefault(); if(e.shiftKey){ if(typeof logRedo==="function")logRedo(); } else if(typeof logUndo==="function")logUndo(); }
+    else if(tab==="program"){ e.preventDefault(); if(e.shiftKey){ if(typeof coachRedo==="function")coachRedo(); } else if(typeof coachUndo==="function")coachUndo(); }
+  }
+});
+
 if(settings.url&&settings.key&&settings.tok)connect();
 })();
 </script>
