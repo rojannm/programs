@@ -113,7 +113,12 @@ html.flatmode details.section > summary h2{color:var(--green)}
 .donebox.done::after{content:"";position:absolute;left:7px;top:3px;width:6px;height:11px;border-right:2.5px solid var(--bg);border-bottom:2.5px solid var(--bg);transform:rotate(40deg)}
 details.exercise.doneToday > summary h3{color:var(--ink2);text-decoration:line-through}
 details.exercise.overdue > summary h3{color:var(--danger)}
-.overdue-banner{background:rgba(192,57,43,.12);color:var(--danger);border:1px solid var(--danger);border-radius:12px;padding:11px 14px;margin-bottom:12px;font-size:.92rem;font-weight:600;cursor:pointer;text-align:center}
+.overdue-banner{display:flex;align-items:center;gap:11px;background:var(--accent-soft);color:var(--accent);
+  border:1px solid var(--accent);border-radius:12px;padding:11px 14px;margin-bottom:12px;font-size:.9rem;font-weight:600}
+.overdue-banner .ob-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.overdue-banner .ob-text{flex:1;cursor:pointer}
+.overdue-banner .ob-x{flex:0 0 auto;border:0;background:none;color:var(--accent);font-size:1.25rem;line-height:1;cursor:pointer;padding:2px 4px;opacity:.65}
+.overdue-banner .ob-x:hover{opacity:1}
 .sess-row{margin:7px 0;font-size:.9rem}
 .sess-date{font-weight:700;color:var(--accent);margin-right:6px;font-variant-numeric:tabular-nums}
 .btn:focus-visible,summary:focus-visible,[contenteditable]:focus-visible,.warmcheck:focus-visible,.chip:focus-visible{
@@ -179,11 +184,11 @@ tr:last-child td{border-bottom:0}
 td[contenteditable]{cursor:text}
 td[contenteditable]:empty::before{content:"—";color:var(--hair)}
 td[contenteditable]:focus{background:var(--accent-soft);outline:none}
-td.del{min-width:34px;width:34px;text-align:center;padding:8px 4px}
+td.del{min-width:34px;width:auto;text-align:right;padding:8px 10px 8px 4px;white-space:nowrap}
 tr.coachrow td:first-child{box-shadow:inset 3px 0 0 var(--coach)}
 tr.coachrow td{background:var(--coach-soft)}
-.rowbadge{display:inline-block;font-size:.62rem;font-weight:800;color:var(--coach);
-  border:1.4px solid var(--coach);border-radius:50%;width:16px;height:16px;line-height:13px;text-align:center}
+.rowbadge{display:inline-block;font-size:.56rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--coach);border:1px solid var(--coach);border-radius:999px;padding:2px 7px;margin-right:8px;vertical-align:middle}
 .delbtn{border:0;background:none;color:var(--ink2);font-size:1rem;line-height:1;cursor:pointer;padding:4px 6px;border-radius:6px}
 .delbtn:hover{color:var(--danger)}
 tr.chipbar td{background:var(--bg2);padding:6px 10px;border-bottom:1px solid var(--hair)}
@@ -704,7 +709,7 @@ function renderTable(ex,container){
     }
     var delc=el("td","del");
     if(flags[ri]==="coach"){
-      var badge=el("span","rowbadge","R");
+      var badge=el("span","rowbadge","Rojan");
       badge.title="Added by Rojan";
       badge.setAttribute("aria-label","Added by Rojan");
       delc.appendChild(badge);
@@ -761,6 +766,7 @@ function renderTable(ex,container){
     store.rows[ex.id].push(blank);
     markDirty(ex.id); persist(false);
     renderTable(ex,container);
+    try{ updateOverdueAll(); }catch(e){}
     var lastRow=container.querySelector('tbody tr[data-ri]:last-of-type td');
     if(lastRow)lastRow.focus();
   });
@@ -842,6 +848,8 @@ function build(){
 
   if(PROG.flat){ buildFlat(content); appendNutrition(content); appendDiscuss(content); return; }
 
+  content.appendChild(makeOverdueBanner());
+
   if(PROG.warmups&&PROG.warmups.length){
     var warm=el("details","section");
     var wsum=el("summary"); wsum.appendChild(el("span","chev"));
@@ -881,7 +889,7 @@ function build(){
       var exDetails=[];
       (day.exercises||[]).forEach(function(ex){
         exIndex[ex.id]=ex;
-        var exd=el("details","exercise");
+        var exd=el("details","exercise"); exd.dataset.exid=ex.id;
         if(META[ex.id]&&META[ex.id].revisit) exd.classList.add("revisit");
         var esum=el("summary"); esum.appendChild(el("span","chev"));
         var h3=el("h3",null,ex.name);
@@ -1020,6 +1028,46 @@ function appendNutrition(content){
 function refreshAllOpenTables(){
   document.querySelectorAll("details.exercise").forEach(function(d){ if(d.rerender)d.rerender(); });
 }
+/* overdue banner shared builder + dismiss */
+var overdueDismissed=false;
+function makeOverdueBanner(){
+  var b=el("div","overdue-banner"); b.id="overdueBanner"; b.style.display="none";
+  b.appendChild(el("span","ob-dot"));
+  var t=el("span","ob-text"); t.addEventListener("click",function(){
+    var first=document.querySelector("details.exercise.overdue");
+    if(first){ first.open=true; var d=first.closest("details.day"); if(d)d.open=true; var s=first.closest("details.section"); if(s)s.open=true; first.scrollIntoView({behavior:"smooth",block:"center"}); }
+  });
+  b.appendChild(t);
+  var x=el("button","ob-x","×"); x.type="button"; x.title="Dismiss for now";
+  x.addEventListener("click",function(e){ e.stopPropagation(); overdueDismissed=true; b.style.display="none";
+    document.querySelectorAll("details.exercise.overdue").forEach(function(n){ n.classList.remove("overdue"); }); });
+  b.appendChild(x);
+  return b;
+}
+function showOverdueBanner(n){
+  var b=document.getElementById("overdueBanner"); if(!b) return;
+  if(overdueDismissed || n<=0){ b.style.display="none"; return; }
+  b.style.display="";
+  b.querySelector(".ob-text").textContent = n+" exercise"+(n>1?"s":"")+" not touched in 2+ weeks — tap to review";
+}
+/* "haven't hit this in a while" for regular (non-flat) clients */
+function updateOverdueAll(){
+  if(PROG && PROG.flat) return;
+  var cutoff=new Date(); cutoff.setDate(cutoff.getDate()-14);
+  var cutIso=cutoff.getFullYear()+"-"+String(cutoff.getMonth()+1).padStart(2,"0")+"-"+String(cutoff.getDate()).padStart(2,"0");
+  var n=0;
+  document.querySelectorAll("details.exercise[data-exid]").forEach(function(node){
+    var id=node.dataset.exid, ex=exIndex[id]; if(!ex) return;
+    var di=colsFor(ex).indexOf("Date"); if(di<0)di=0;
+    var rows=store.rows[id]||(ex.seed||[]);
+    var last=null;
+    rows.forEach(function(r){ var iso=mdToIso(r[di]); if(iso&&(!last||iso>last))last=iso; });
+    var od=last && last<cutIso;
+    node.classList.toggle("overdue",!!od);
+    if(od) n++;
+  });
+  showOverdueBanner(n);
+}
 
 /* ---------- flat (personal) mode ---------- */
 var flatNodes={};
@@ -1108,11 +1156,7 @@ function updateOverdue(){
     var node=flatNodes[ex.id]; if(node) node.classList.toggle("overdue",!!od);
     if(od) n++;
   });
-  var b=document.getElementById("overdueBanner");
-  if(b){
-    if(n>0){ b.style.display=""; b.textContent="🔴 "+n+" exercise"+(n>1?"s":"")+" not done in 2+ weeks — tap to jump"; }
-    else b.style.display="none";
-  }
+  showOverdueBanner(n);
 }
 function flatSortKey(name){ return (name||"").replace(/^\d+\/\d+\s+/,"").toLowerCase().trim(); }
 function buildFlat(content){
@@ -1122,12 +1166,7 @@ function buildFlat(content){
   list.forEach(function(ex){ exIndex[ex.id]=ex; if(ex.variants) ex.variants.forEach(function(v){ exIndex[v.id]=v; }); });
   list.sort(function(a,b){ var ka=flatSortKey(a.name), kb=flatSortKey(b.name); return ka<kb?-1:ka>kb?1:0; });
 
-  var banner=el("div","overdue-banner"); banner.id="overdueBanner"; banner.style.display="none";
-  banner.addEventListener("click",function(){
-    var first=document.querySelector("details.exercise.overdue");
-    if(first){ first.open=true; first.scrollIntoView({behavior:"smooth",block:"center"}); }
-  });
-  content.appendChild(banner);
+  content.appendChild(makeOverdueBanner());
 
   var sess=el("details","section"); sess.id="sec-sessions";
   var sh=el("summary"); sh.appendChild(el("span","chev")); sh.appendChild(el("h2",null,"Sessions")); sh.appendChild(el("span","count",""));
@@ -1289,7 +1328,7 @@ async function boot(){
   try{
     await pullLogs();
     refreshAllOpenTables();
-    if(PROG.flat){ try{ updateOverdue(); }catch(e){} }
+    if(PROG.flat){ try{ updateOverdue(); }catch(e){} } else { try{ updateOverdueAll(); }catch(e){} }
     var fn=document.getElementById("freenote");
     if(fn&&store.notes&&fn.textContent!==store.notes)fn.textContent=store.notes;
     setPill("synced");
