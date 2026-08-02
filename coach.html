@@ -144,6 +144,38 @@ tr.chipbar td{background:var(--bg2);padding:6px 10px}
 .msgcard.resolved{border-left-color:var(--hair);opacity:.6}
 .msgmeta{font-size:.72rem;color:var(--ink2);margin-bottom:4px}
 .msgbody{font-size:.92rem;white-space:pre-wrap;margin-bottom:8px}
+/* profile */
+.chartgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:6px 0 14px}
+.chartcard{border:1px solid var(--hair);border-radius:12px;padding:12px;background:var(--card)}
+.chart-lbl{font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);margin-bottom:8px}
+.chart-empty{font-size:.82rem;color:var(--ink2);padding:14px 0;text-align:center}
+.chart-foot{display:flex;align-items:baseline;gap:8px;margin-top:6px}
+.chart-val{font-family:"Fraunces",serif;font-size:1.3rem;font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
+.chart-delta{font-size:.74rem;font-weight:600;color:var(--ink2)}
+.chart-delta.up{color:var(--good)} .chart-delta.down{color:var(--accent)}
+.seg-row{display:flex;align-items:center;gap:8px;margin:7px 0}
+.seg-name{font-size:.74rem;color:var(--ink2);width:40px;flex:0 0 auto}
+.seg-cell{flex:1;display:flex;align-items:center;gap:6px}
+.seg-side{font-size:.68rem;color:var(--ink2);width:44px;flex:0 0 auto;font-variant-numeric:tabular-nums}
+.seg-bar{flex:1;height:8px;background:var(--bg2);border-radius:999px;overflow:hidden}
+.seg-fill{height:100%;background:var(--accent);border-radius:999px}
+.seg-fill.l{background:var(--green)}
+.fms-row{display:flex;align-items:center;gap:8px;margin:6px 0}
+.fms-name{font-size:.78rem;color:var(--ink);width:110px;flex:0 0 auto}
+.fms-track{flex:1;display:flex;gap:3px}
+.fms-seg{flex:1;height:9px;border-radius:3px;background:var(--bg2)}
+.fms-seg.on.low{background:var(--accent)} .fms-seg.on.mid{background:var(--demo)} .fms-seg.on.hi{background:var(--good)}
+.fms-num{font-size:.8rem;font-weight:700;width:16px;text-align:right;font-variant-numeric:tabular-nums}
+.fms-tot{font-weight:700;font-variant-numeric:tabular-nums}
+.prof-h{font-family:"Fraunces",serif;font-weight:500;font-size:1.15rem;margin:20px 0 8px;color:var(--green)}
+.prof-addform{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-top:10px}
+.prof-fld{display:flex;flex-direction:column;gap:3px;font-size:.68rem;color:var(--ink2);font-weight:600}
+.prof-fld input{width:88px;font:inherit;font-size:.9rem;color:var(--ink);background:var(--bg);border:1px solid var(--hair);border-radius:8px;padding:7px 9px}
+.prof-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;margin-top:10px}
+.gal-cell{border:1px solid var(--hair);border-radius:10px;overflow:hidden;background:var(--card)}
+.gal-cell img{width:100%;height:120px;object-fit:cover;display:block}
+.gal-cap{display:flex;justify-content:space-between;align-items:center;padding:4px 8px;font-size:.72rem;color:var(--ink2)}
+.prof-upload{margin-top:4px}
 #toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(80px);
   background:var(--ink);color:var(--bg);padding:10px 20px;border-radius:999px;font-size:.9rem;
   font-weight:600;opacity:0;transition:all .25s ease;pointer-events:none;z-index:50;white-space:nowrap}
@@ -197,6 +229,7 @@ tr.chipbar td{background:var(--bg2);padding:6px 10px}
       <button class="tab" data-tab="logs" type="button">Logs</button>
       <button class="tab" data-tab="messages" type="button">Messages<span id="msgBadge" class="badge" style="display:none"></span></button>
       <button class="tab" data-tab="nutrition" type="button">Nutrition</button>
+      <button class="tab" data-tab="profile" type="button">Profile</button>
       <button class="tab" data-tab="private" type="button">Private</button>
       <button class="tab" data-tab="access" type="button">Access</button>
     </div>
@@ -204,6 +237,7 @@ tr.chipbar td{background:var(--bg2);padding:6px 10px}
     <div id="tab-logs" style="display:none"></div>
     <div id="tab-messages" style="display:none"></div>
     <div id="tab-nutrition" style="display:none"></div>
+    <div id="tab-profile" style="display:none"></div>
     <div id="tab-private" style="display:none"></div>
     <div id="tab-access" style="display:none"></div>
   </div>
@@ -329,12 +363,13 @@ document.querySelectorAll(".tab").forEach(function(t){
 });
 function showTab(name){
   document.querySelectorAll(".tab").forEach(function(t){ t.classList.toggle("on",t.dataset.tab===name); });
-  ["program","logs","messages","nutrition","private","access"].forEach(function(n){
+  ["program","logs","messages","nutrition","profile","private","access"].forEach(function(n){
     $("tab-"+n).style.display=(n===name)?"":"none";
   });
   if(name==="logs")loadLogs();
   if(name==="messages")loadMessages();
   if(name==="nutrition")loadNutrition();
+  if(name==="profile")loadProfile();
   if(name==="private")loadPrivate();
   if(name==="access")renderAccess();
 }
@@ -1084,6 +1119,223 @@ async function loadMessages(){
     }
     host.appendChild(card);
   });
+}
+
+/* ---------- profile tab: InBody + FMS ---------- */
+var PROFILE={inbody:[],fms:[],images:[]};
+var profileTimer=null;
+var BUCKET="client-media";
+function storageUrl(p){ return settings.url.replace(/\/$/,"")+"/storage/v1"+p; }
+function publicUrl(path){ return settings.url.replace(/\/$/,"")+"/storage/v1/object/public/"+BUCKET+"/"+path; }
+async function fetchProfile(){
+  try{
+    var r=await fetch(url("/rest/v1/client_profile?client_slug=eq."+esc(currentSlug)+"&select=data"),{headers:headers()});
+    if(!r.ok) return {inbody:[],fms:[],images:[]};
+    var a=await r.json();
+    if(!a.length) return {inbody:[],fms:[],images:[]};
+    var d=JSON.parse(a[0].data); d.inbody=d.inbody||[]; d.fms=d.fms||[]; d.images=d.images||[]; return d;
+  }catch(e){ return {inbody:[],fms:[],images:[]}; }
+}
+function saveProfileSoon(){ clearTimeout(profileTimer); profileTimer=setTimeout(saveProfile,600); }
+async function saveProfile(){
+  try{
+    var r=await fetch(url("/rest/v1/client_profile?on_conflict=client_slug"),{
+      method:"POST",headers:headers({"Prefer":"resolution=merge-duplicates,return=minimal"}),
+      body:JSON.stringify([{client_slug:currentSlug,data:JSON.stringify(PROFILE),updated_at:new Date().toISOString()}])});
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    toast("Profile saved");
+  }catch(e){ toast("Save failed"); }
+}
+async function uploadProfileImage(file){
+  var ext=((file.name||"img.jpg").split(".").pop()||"jpg").toLowerCase();
+  var path=currentSlug+"/inbody-"+Date.now()+"-"+Math.random().toString(36).slice(2,7)+"."+ext;
+  var r=await fetch(storageUrl("/object/"+BUCKET+"/"+encodeURIComponent(path).replace(/%2F/g,"/")),{
+    method:"POST",headers:{"apikey":settings.key,"Authorization":"Bearer "+settings.key,"Content-Type":file.type||"image/jpeg","x-upsert":"true"},
+    body:file});
+  if(!r.ok) throw new Error("upload "+r.status);
+  return publicUrl(path);
+}
+function pnum(x){ var v=parseFloat(x); return isNaN(v)?null:v; }
+function pint(x){ var v=parseInt(x,10); return isNaN(v)?0:v; }
+function fmsTotal(e){
+  function mn(a,b){ return Math.min(pint(a),pint(b)); }
+  return pint(e.deepSquat)+mn(e.hurdleL,e.hurdleR)+mn(e.lungeL,e.lungeR)+mn(e.shoulderL,e.shoulderR)+mn(e.aslrL,e.aslrR)+pint(e.pushup)+mn(e.rotaryL,e.rotaryR);
+}
+function sortByDate(arr){ return arr.slice().sort(function(a,b){ var ia=mdIso(a.date),ib=mdIso(b.date); return (ia||"")<(ib||"")?-1:(ia||"")>(ib||"")?1:0; }); }
+function mdIso(s){ var m=(s||"").match(/^(\d{1,2})\/(\d{1,2})/); if(!m)return s; var y=new Date().getFullYear(); var d=new Date(y,+m[1]-1,+m[2]); if(d>new Date())d=new Date(y-1,+m[1]-1,+m[2]); return d.getFullYear()+"-"+String(+m[1]).padStart(2,"0")+"-"+String(+m[2]).padStart(2,"0"); }
+function svgLineChart(entries,key,label,unit){
+  var pts=entries.map(function(e){ return {label:e.date,v:pnum(e[key])}; }).filter(function(p){return p.v!=null;});
+  var wrap=el("div","chartcard");
+  wrap.appendChild(el("div","chart-lbl",label));
+  if(pts.length<1){ wrap.appendChild(el("div","chart-empty","No data yet")); return wrap; }
+  var W=280,H=84,pad=10;
+  var vals=pts.map(function(p){return p.v;});
+  var mn=Math.min.apply(null,vals), mx=Math.max.apply(null,vals); if(mn===mx){mn-=1;mx+=1;}
+  var n=pts.length;
+  function X(i){ return pad+(n<=1?(W-2*pad)/2:(i/(n-1))*(W-2*pad)); }
+  function Y(v){ return H-pad-((v-mn)/(mx-mn))*(H-2*pad); }
+  var line="",area="";
+  pts.forEach(function(p,i){ var cx=X(i).toFixed(1),cy=Y(p.v).toFixed(1); line+=(i?" L":"M")+cx+" "+cy; });
+  area="M"+X(0).toFixed(1)+" "+(H-pad)+" "+pts.map(function(p,i){return "L"+X(i).toFixed(1)+" "+Y(p.v).toFixed(1);}).join(" ")+" L"+X(n-1).toFixed(1)+" "+(H-pad)+" Z";
+  var lastv=pts[n-1].v, firstv=pts[0].v, delta=lastv-firstv;
+  var svg='<svg viewBox="0 0 '+W+' '+H+'" width="100%" preserveAspectRatio="none" style="display:block">'+
+    '<path d="'+area+'" fill="var(--accent-soft)"/>'+
+    '<path d="'+line+'" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>'+
+    '<circle cx="'+X(n-1).toFixed(1)+'" cy="'+Y(lastv).toFixed(1)+'" r="3" fill="var(--accent)"/></svg>';
+  var g=document.createElement("div"); g.innerHTML=svg; wrap.appendChild(g.firstChild);
+  var foot=el("div","chart-foot");
+  foot.appendChild(el("span","chart-val",lastv+(unit||"")));
+  if(n>1){ var d=el("span","chart-delta"+(delta>0?" up":delta<0?" down":""), (delta>0?"▲ +":delta<0?"▼ ":"")+Math.abs(Math.round(delta*10)/10)+(unit||"")); foot.appendChild(d); }
+  wrap.appendChild(foot);
+  return wrap;
+}
+function segmentBars(e){
+  var wrap=el("div","chartcard");
+  wrap.appendChild(el("div","chart-lbl","Segmental lean (L vs R)"));
+  var pairs=[["Arms",pnum(e.lArm),pnum(e.rArm)],["Legs",pnum(e.lLeg),pnum(e.rLeg)]];
+  var any=pairs.some(function(p){return p[1]!=null||p[2]!=null;});
+  if(!any){ wrap.appendChild(el("div","chart-empty","No segmental data")); return wrap; }
+  var mx=Math.max(1,pnum(e.lArm)||0,pnum(e.rArm)||0,pnum(e.lLeg)||0,pnum(e.rLeg)||0);
+  pairs.forEach(function(p){
+    var row=el("div","seg-row");
+    row.appendChild(el("span","seg-name",p[0]));
+    ["L "+(p[1]!=null?p[1]:"–"),"R "+(p[2]!=null?p[2]:"–")].forEach(function(t,idx){
+      var v=idx===0?p[1]:p[2];
+      var b=el("div","seg-bar"); var fill=el("div","seg-fill"); fill.style.width=((v!=null?v/mx:0)*100)+"%";
+      if(idx===0)fill.classList.add("l"); b.appendChild(fill);
+      var cell=el("div","seg-cell"); cell.appendChild(el("span","seg-side",t)); cell.appendChild(b); row.appendChild(cell);
+    });
+    wrap.appendChild(row);
+  });
+  return wrap;
+}
+function fmsChart(e){
+  var wrap=el("div","chartcard");
+  wrap.appendChild(el("div","chart-lbl","FMS · "+(e.date||"")+"  ·  "+fmsTotal(e)+" / 21"));
+  var tests=[["Deep Squat",pint(e.deepSquat)],["Hurdle",Math.min(pint(e.hurdleL),pint(e.hurdleR))],
+    ["In-line Lunge",Math.min(pint(e.lungeL),pint(e.lungeR))],["Shoulder",Math.min(pint(e.shoulderL),pint(e.shoulderR))],
+    ["ASLR",Math.min(pint(e.aslrL),pint(e.aslrR))],["Trunk Pushup",pint(e.pushup)],["Rotary",Math.min(pint(e.rotaryL),pint(e.rotaryR))]];
+  tests.forEach(function(t){
+    var row=el("div","fms-row");
+    row.appendChild(el("span","fms-name",t[0]));
+    var track=el("div","fms-track");
+    for(var i=1;i<=3;i++){ var seg=el("div","fms-seg"+(i<=t[1]?" on"+(t[1]===1?" low":t[1]===2?" mid":" hi"):"")); track.appendChild(seg); }
+    row.appendChild(track);
+    row.appendChild(el("span","fms-num",String(t[1])));
+    wrap.appendChild(row);
+  });
+  return wrap;
+}
+var INBODY_FIELDS=[["date","Date","text"],["weight","Weight","num"],["bodyFat","Body fat %","num"],["muscle","Skeletal muscle","num"],
+  ["lArm","L arm","num"],["rArm","R arm","num"],["lLeg","L leg","num"],["rLeg","R leg","num"],
+  ["restingHR","Resting HR","num"],["systolic","Systolic","num"],["diastolic","Diastolic","num"]];
+var FMS_FIELDS=[["date","Date"],["deepSquat","Deep Squat"],["hurdleL","Hurdle L"],["hurdleR","Hurdle R"],
+  ["lungeL","Lunge L"],["lungeR","Lunge R"],["shoulderL","Shoulder L"],["shoulderR","Shoulder R"],
+  ["aslrL","ASLR L"],["aslrR","ASLR R"],["pushup","Trunk Pushup"],["rotaryL","Rotary L"],["rotaryR","Rotary R"]];
+async function loadProfile(){
+  var host=$("tab-profile"); host.textContent="Loading…";
+  PROFILE=await fetchProfile();
+  renderProfile();
+}
+function renderProfile(){
+  var host=$("tab-profile"); host.textContent="";
+  host.appendChild(el("p","note","InBody and FMS tracking. Enter numbers and the charts build themselves."));
+
+  /* charts */
+  var ib=sortByDate(PROFILE.inbody);
+  var charts=el("div","chartgrid");
+  charts.appendChild(svgLineChart(ib,"weight","Weight",""));
+  charts.appendChild(svgLineChart(ib,"bodyFat","Body fat %","%"));
+  charts.appendChild(svgLineChart(ib,"muscle","Skeletal muscle",""));
+  if(ib.length) charts.appendChild(segmentBars(ib[ib.length-1]));
+  host.appendChild(charts);
+  var fmsSorted=sortByDate(PROFILE.fms);
+  if(fmsSorted.length){ host.appendChild(fmsChart(fmsSorted[fmsSorted.length-1])); }
+
+  /* InBody entries */
+  host.appendChild(el("h3","prof-h","InBody entries"));
+  host.appendChild(entryTable(PROFILE.inbody, INBODY_FIELDS.map(function(f){return [f[0],f[1]];}), function(){ saveProfileSoon(); renderProfile(); }));
+  host.appendChild(addForm(INBODY_FIELDS, function(obj){ PROFILE.inbody.push(obj); saveProfileSoon(); renderProfile(); }));
+
+  /* FMS entries */
+  host.appendChild(el("h3","prof-h","FMS entries"));
+  host.appendChild(entryTable(PROFILE.fms, FMS_FIELDS, function(){ saveProfileSoon(); renderProfile(); }, true));
+  host.appendChild(addForm(FMS_FIELDS.map(function(f){return [f[0],f[1],f[0]==="date"?"text":"num"];}), function(obj){ PROFILE.fms.push(obj); saveProfileSoon(); renderProfile(); }));
+
+  /* Photos */
+  host.appendChild(el("h3","prof-h","InBody photos"));
+  var up=el("div","prof-upload");
+  var fin=document.createElement("input"); fin.type="file"; fin.accept="image/*"; fin.style.display="none";
+  var ub=el("button","btn","Upload InBody photo"); ub.type="button";
+  ub.addEventListener("click",function(){ fin.click(); });
+  fin.addEventListener("change",function(){
+    var f=fin.files[0]; if(!f)return; ub.disabled=true; ub.textContent="Uploading…";
+    uploadProfileImage(f).then(function(u){
+      PROFILE.images.push({url:u,date:todayMD()}); saveProfile(); renderProfile();
+    }).catch(function(e){ toast("Upload failed"); ub.disabled=false; ub.textContent="Upload InBody photo"; });
+  });
+  up.appendChild(ub); up.appendChild(fin); host.appendChild(up);
+  if(PROFILE.images.length){
+    var gal=el("div","prof-gallery");
+    PROFILE.images.slice().reverse().forEach(function(img,ri){
+      var idx=PROFILE.images.length-1-ri;
+      var cell=el("div","gal-cell");
+      var a=document.createElement("a"); a.href=img.url; a.target="_blank"; a.rel="noopener";
+      var im=document.createElement("img"); im.src=img.url; im.loading="lazy"; a.appendChild(im); cell.appendChild(a);
+      var cap=el("div","gal-cap"); cap.appendChild(el("span",null,img.date||""));
+      var del=el("button","logdel","✕"); del.type="button";
+      del.addEventListener("click",function(){ if(!confirm("Remove this photo? (the file stays in storage)"))return; PROFILE.images.splice(idx,1); saveProfile(); renderProfile(); });
+      cap.appendChild(del); cell.appendChild(cap); gal.appendChild(cell);
+    });
+    host.appendChild(gal);
+  }
+}
+function entryTable(arr, fields, onchange, isFms){
+  var wrap=el("div","tblwrap");
+  if(!arr.length){ var e=el("p","note","No entries yet."); return e; }
+  var t=el("table"), thead=el("thead"), htr=el("tr");
+  fields.forEach(function(f){ htr.appendChild(el("th",null,f[1])); });
+  if(isFms) htr.appendChild(el("th",null,"Total"));
+  htr.appendChild(el("th",null,""));
+  thead.appendChild(htr); t.appendChild(thead);
+  var tb=el("tbody");
+  sortByDate(arr).forEach(function(e){
+    var realIdx=arr.indexOf(e);
+    var tr=el("tr");
+    fields.forEach(function(f){
+      var td=el("td"); td.textContent=e[f[0]]!=null?e[f[0]]:"";
+      try{ td.contentEditable="plaintext-only"; }catch(x){ td.contentEditable="true"; }
+      td.addEventListener("input",function(){ e[f[0]]=td.textContent.trim(); onchange(); });
+      tr.appendChild(td);
+    });
+    if(isFms){ tr.appendChild(el("td","fms-tot",String(fmsTotal(e)))); }
+    var dc=el("td"); var db=el("button","logdel","✕"); db.type="button";
+    db.addEventListener("click",function(){ if(!confirm("Delete this entry?"))return; arr.splice(realIdx,1); onchange(); });
+    dc.appendChild(db); tr.appendChild(dc);
+    tb.appendChild(tr);
+  });
+  t.appendChild(tb); wrap.appendChild(t); return wrap;
+}
+function addForm(fields, onadd){
+  var f=el("div","prof-addform");
+  var inputs={};
+  fields.forEach(function(fl){
+    var w=el("label","prof-fld"); w.appendChild(el("span",null,fl[1]));
+    var inp=document.createElement("input"); inp.type=(fl[2]==="num")?"text":"text";
+    if(fl[0]==="date") inp.placeholder=todayMD();
+    inputs[fl[0]]=inp; w.appendChild(inp); f.appendChild(w);
+  });
+  var btn=el("button","btn","+ Add entry"); btn.type="button";
+  btn.addEventListener("click",function(){
+    var obj={}; var any=false;
+    fields.forEach(function(fl){ var v=inputs[fl[0]].value.trim(); if(v)any=true; obj[fl[0]]=v; });
+    if(!obj.date) obj.date=todayMD();
+    if(!any){ toast("Fill in something first"); return; }
+    onadd(obj);
+    fields.forEach(function(fl){ inputs[fl[0]].value=""; });
+  });
+  f.appendChild(btn);
+  return f;
 }
 
 /* ---------- access tab ---------- */
