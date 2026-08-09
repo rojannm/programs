@@ -176,6 +176,31 @@ tr.chipbar td{background:var(--bg2);padding:6px 10px}
 .gal-cell img{width:100%;height:120px;object-fit:cover;display:block}
 .gal-cap{display:flex;justify-content:space-between;align-items:center;padding:4px 8px;font-size:.72rem;color:var(--ink2)}
 .prof-upload{margin-top:4px}
+.bodycard{border:1px solid var(--hair);border-radius:14px;padding:14px;background:var(--card);margin:6px 0 14px}
+.bc-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap}
+.bc-t{font-family:"Fraunces",serif;font-weight:500;font-size:1.05rem;color:var(--ink)}
+.bc-toggle{display:flex;gap:4px}
+.bc-toggle button{font:inherit;font-size:.66rem;font-weight:700;letter-spacing:.03em;border:1px solid var(--hair);background:transparent;color:var(--ink2);padding:5px 10px;border-radius:999px;cursor:pointer;line-height:1.1}
+.bc-toggle button.on{background:var(--green);color:#F3ECDD;border-color:var(--green)}
+.bc-toggle button:disabled{opacity:.4;cursor:not-allowed}
+.bc-sub{font-size:.8rem;color:var(--ink2);margin:2px 0 2px}
+.bc-legend{display:flex;align-items:center;gap:8px;justify-content:center;margin-top:6px;font-size:.64rem;color:var(--ink2);font-weight:600}
+.bc-legend .bar{width:90px;height:8px;border-radius:999px;background:linear-gradient(90deg,rgb(222,214,196),rgb(51,67,47))}
+.bc-legend2{text-align:center;font-size:.64rem;color:var(--ink2);margin-top:4px}
+.bc-legend2 .ring{display:inline-block;width:9px;height:9px;border-radius:50%;border:2px solid var(--accent);vertical-align:-1px;margin-right:3px}
+.seg-legend{display:flex;flex-wrap:wrap;gap:5px 12px;justify-content:center;margin-top:10px;font-size:.66rem;font-weight:600;color:var(--ink2)}
+.seg-legend span{display:inline-flex;align-items:center;gap:5px}
+.seg-legend i{width:14px;height:3px;border-radius:2px;display:inline-block}
+.sched-grid{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin:4px 0 6px}
+.sched-fld{display:flex;flex-direction:column;gap:3px;font-size:.68rem;color:var(--ink2);font-weight:600}
+.sched-fld input[type=date],.sched-fld input[type=number]{font:inherit;font-size:.9rem;color:var(--ink);background:var(--bg);border:1px solid var(--hair);border-radius:8px;padding:7px 9px}
+.sched-fld input[type=number]{width:74px}
+.sched-toggle{display:flex;align-items:center;gap:6px;font-size:.82rem;color:var(--ink);font-weight:600}
+.reminders{margin:0 0 14px}
+.remind-item{display:flex;align-items:center;gap:8px;background:var(--accent-soft);border:1px solid var(--hair);border-radius:10px;padding:9px 12px;margin-bottom:6px;font-size:.86rem}
+.remind-item .rdot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex:0 0 auto}
+.remind-item.prog .rdot{background:var(--green)}
+.remind-item a{color:var(--accent);font-weight:700;cursor:pointer;text-decoration:underline}
 #toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(80px);
   background:var(--ink);color:var(--bg);padding:10px 20px;border-radius:999px;font-size:.9rem;
   font-weight:600;opacity:0;transition:all .25s ease;pointer-events:none;z-index:50;white-space:nowrap}
@@ -201,6 +226,8 @@ tr.chipbar td{background:var(--bg2);padding:6px 10px}
     <input type="file" id="importFile" accept="application/json" style="display:none">
     <p id="status"></p>
   </div>
+
+  <div id="reminders" class="reminders"></div>
 
   <div class="card">
     <h2>Clients</h2>
@@ -322,6 +349,7 @@ async function connect(){
     tokensList=t.ok?await t.json():[];
     setStatus("Connected. "+clientsList.length+" clients.","ok");
     renderClients();
+    renderReminders();
     $("newClientBtn").style.display="";
     $("importNotesBtn").style.display="";
     var pre=new URLSearchParams(location.search).get("c");
@@ -333,6 +361,43 @@ $("saveConn").addEventListener("click",connect);
 function tokenFor(slug){
   var t=tokensList.find(function(x){return x.client_slug===slug;});
   return t?t.token:null;
+}
+function nameFor(slug){ var c=clientsList.find(function(x){return x.client_slug===slug;}); return c?c.name:slug; }
+function parseDateLoose(s){
+  if(!s) return null;
+  if(/^\d{4}-\d{2}-\d{2}/.test(s)) return new Date(s.slice(0,10)+"T00:00:00");
+  var iso=mdIso(s); if(/^\d{4}-\d{2}-\d{2}/.test(iso)) return new Date(iso+"T00:00:00");
+  return null;
+}
+function addDays(d,n){ var x=new Date(d); x.setDate(x.getDate()+n); return x; }
+function fmtMD(d){ return (d.getMonth()+1)+"/"+d.getDate(); }
+async function renderReminders(){
+  var host=$("reminders"); if(!host) return; host.textContent="";
+  var rows=[];
+  try{ var r=await fetch(url("/rest/v1/client_profile?select=client_slug,data"),{headers:headers()}); if(r.ok) rows=await r.json(); }
+  catch(e){ return; }
+  var today=new Date(); today.setHours(0,0,0,0);
+  var items=[];
+  rows.forEach(function(row){
+    var d; try{ d=JSON.parse(row.data); }catch(e){ return; }
+    var sc=d.schedule||{}, ib=d.inbody||[], nm=nameFor(row.client_slug);
+    if(sc.inbodyRemind!==false && sc.inbodyWeeks && ib.length){
+      var last=ib.map(function(e){return parseDateLoose(e.date);}).filter(Boolean).sort(function(a,b){return a-b;}).pop();
+      if(last){ var due=addDays(last,sc.inbodyWeeks*7); if(today>=due) items.push({slug:row.client_slug,type:"inbody",text:nm+" is due for an InBody re-scan (last "+fmtMD(last)+")"}); }
+    }
+    if(sc.start && sc.weeks){
+      var st=parseDateLoose(sc.start);
+      if(st){ var end=addDays(st,sc.weeks*7), warn=addDays(end,-7);
+        if(today>=warn) items.push({slug:row.client_slug,type:"prog",text: today>=end ? (nm+"'s program has ended ("+fmtMD(end)+") — time to re-program") : (nm+"'s program ends "+fmtMD(end)) }); }
+    }
+  });
+  items.forEach(function(it){
+    var box=el("div","remind-item"+(it.type==="prog"?" prog":""));
+    box.appendChild(el("span","rdot"));
+    box.appendChild(el("span",null,it.text));
+    var go=el("a",null,"Open"); go.addEventListener("click",function(){ selectClient(it.slug); window.scrollTo(0,0); });
+    box.appendChild(go); host.appendChild(box);
+  });
 }
 function renderClients(){
   var host=$("clients"); host.textContent="";
@@ -1122,7 +1187,7 @@ async function loadMessages(){
 }
 
 /* ---------- profile tab: InBody + FMS ---------- */
-var PROFILE={inbody:[],fms:[],images:[]};
+var PROFILE={inbody:[],fms:[],images:[],norms:{},schedule:{}};
 var profileTimer=null;
 var BUCKET="client-media";
 function storageUrl(p){ return settings.url.replace(/\/$/,"")+"/storage/v1"+p; }
@@ -1130,11 +1195,11 @@ function publicUrl(path){ return settings.url.replace(/\/$/,"")+"/storage/v1/obj
 async function fetchProfile(){
   try{
     var r=await fetch(url("/rest/v1/client_profile?client_slug=eq."+esc(currentSlug)+"&select=data"),{headers:headers()});
-    if(!r.ok) return {inbody:[],fms:[],images:[]};
+    if(!r.ok) return {inbody:[],fms:[],images:[],norms:{},schedule:{}};
     var a=await r.json();
-    if(!a.length) return {inbody:[],fms:[],images:[]};
-    var d=JSON.parse(a[0].data); d.inbody=d.inbody||[]; d.fms=d.fms||[]; d.images=d.images||[]; return d;
-  }catch(e){ return {inbody:[],fms:[],images:[]}; }
+    if(!a.length) return {inbody:[],fms:[],images:[],norms:{},schedule:{}};
+    var d=JSON.parse(a[0].data); d.inbody=d.inbody||[]; d.fms=d.fms||[]; d.images=d.images||[]; d.norms=d.norms||{}; d.schedule=d.schedule||{}; return d;
+  }catch(e){ return {inbody:[],fms:[],images:[],norms:{},schedule:{}}; }
 }
 function saveProfileSoon(){ clearTimeout(profileTimer); profileTimer=setTimeout(saveProfile,600); }
 async function saveProfile(){
@@ -1209,6 +1274,108 @@ function segmentBars(e){
   });
   return wrap;
 }
+/* ---- segmental body map: slim figure, flip % / lbs / change ---- */
+var SEG_DEFS=[
+  {key:"rArm",name:"R arm",lo:4,hi:6.5},
+  {key:"lArm",name:"L arm",lo:4,hi:6.5},
+  {key:"trunk",name:"Trunk",lo:20,hi:28},
+  {key:"rLeg",name:"R leg",lo:11,hi:16},
+  {key:"lLeg",name:"L leg",lo:11,hi:16}
+];
+var SEG_LIMBS={
+  rArm:{x1:132,y1:84,x2:104,y2:176,w:12},
+  lArm:{x1:168,y1:84,x2:196,y2:176,w:12},
+  rLeg:{x1:143,y1:178,x2:135,y2:314,w:17},
+  lLeg:{x1:157,y1:178,x2:165,y2:314,w:17}
+};
+function segMix(t){ function L(a,b){return Math.round(a+(b-a)*Math.max(0,Math.min(1,t)));} return 'rgb('+L(222,51)+','+L(214,67)+','+L(196,47)+')'; }
+function segFill(d,mode){
+  if(d.now==null) return 'rgb(222,214,196)';
+  var t;
+  if(mode==='chg') t=(d.start==null?0:(d.now-d.start))/0.8;
+  else if(mode==='pct') t=(d.norm?(d.now/d.norm*100-85)/30:0.5);
+  else t=(d.now-d.lo)/(d.hi-d.lo);
+  return segMix(t);
+}
+function segFmt(d,mode){
+  if(d.now==null) return '–';
+  if(mode==='pct') return d.norm?Math.round(d.now/d.norm*100)+'%':'–';
+  if(mode==='chg') return d.start==null?'–':((d.now-d.start>=0?'+':'−')+Math.abs(d.now-d.start).toFixed(1));
+  return d.now.toFixed(1);
+}
+function bodyFigureCard(ib, norms){
+  var wrap=el("div","bodycard");
+  var top=el("div","bc-top"); top.appendChild(el("span","bc-t","Segmental lean mass"));
+  var tog=el("div","bc-toggle"); top.appendChild(tog); wrap.appendChild(top);
+  var sub=el("div","bc-sub"); wrap.appendChild(sub);
+  var fig=el("div"); wrap.appendChild(fig);
+  if(!ib.length){ sub.textContent=""; fig.appendChild(el("div","chart-empty","No InBody data yet")); return wrap; }
+  var latest=ib[ib.length-1], first=ib[0];
+  var D={};
+  SEG_DEFS.forEach(function(s){ D[s.key]={now:pnum(latest[s.key]),start:pnum(first[s.key]),norm:norms?pnum(norms[s.key]):null,lo:s.lo,hi:s.hi,name:s.name}; });
+  var hasNorm=SEG_DEFS.some(function(s){return D[s.key].norm!=null;});
+  var SUB={pct:"Percent of normal for each segment",lbs:"Lean mass in each segment, lbs",chg:"Change since first scan, lbs"};
+  function buildFig(mode){
+    var weak={};
+    if(D.rArm.now!=null&&D.lArm.now!=null) weak[D.rArm.now<=D.lArm.now?"rArm":"lArm"]=true;
+    if(D.rLeg.now!=null&&D.lLeg.now!=null) weak[D.rLeg.now<=D.lLeg.now?"rLeg":"lLeg"]=true;
+    var s='<svg viewBox="0 0 300 330" width="100%" style="display:block;max-width:250px;margin:8px auto 0">';
+    s+='<circle cx="150" cy="42" r="17" fill="#E4DCCB" stroke="#CDBFA4" stroke-width="1.3"/>';
+    s+='<rect x="143" y="57" width="14" height="14" rx="5" fill="#E4DCCB"/>';
+    s+='<path d="M133 74 Q150 68 167 74 L160 180 Q150 186 140 180 Z" fill="'+segFill(D.trunk,mode)+'" stroke="#00000012" stroke-width="1"/>';
+    Object.keys(SEG_LIMBS).forEach(function(k){
+      var L=SEG_LIMBS[k];
+      if(weak[k]) s+='<line x1="'+L.x1+'" y1="'+L.y1+'" x2="'+L.x2+'" y2="'+L.y2+'" stroke="#8A2B37" stroke-width="'+(L.w+6)+'" stroke-linecap="round" opacity="0.32"/>';
+      s+='<line x1="'+L.x1+'" y1="'+L.y1+'" x2="'+L.x2+'" y2="'+L.y2+'" stroke="'+segFill(D[k],mode)+'" stroke-width="'+L.w+'" stroke-linecap="round"/>';
+    });
+    function chip(cx,cy,d,pill){
+      var g='<g font-family=\'Hanken Grotesk\'>';
+      if(pill) g+='<rect x="'+(cx-31)+'" y="'+(cy-15)+'" width="62" height="32" rx="9" fill="'+(getComputedStyle(document.documentElement).getPropertyValue('--card')||'#FBF6EC').trim()+'" opacity="0.9"/>';
+      g+='<text x="'+cx+'" y="'+(cy-3)+'" text-anchor="middle" font-size="8" letter-spacing="0.6" fill="var(--ink2)" font-weight="700">'+d.name.toUpperCase()+'</text>';
+      g+='<text x="'+cx+'" y="'+(cy+13)+'" text-anchor="middle" font-size="17" font-family="Fraunces" fill="var(--ink)">'+segFmt(d,mode)+'</text></g>';
+      return g;
+    }
+    s+=chip(38,146,D.rArm,0)+chip(262,146,D.lArm,0)+chip(40,288,D.rLeg,0)+chip(260,288,D.lLeg,0)+chip(150,118,D.trunk,1);
+    s+='</svg>'; return s;
+  }
+  function paint(mode){
+    fig.innerHTML=buildFig(mode); sub.textContent=SUB[mode];
+    Array.prototype.forEach.call(tog.children,function(b){ b.classList.toggle("on",b.dataset.m===mode); });
+  }
+  [["pct","% normal"],["lbs","Lean lbs"],["chg","Change"]].forEach(function(m){
+    var b=el("button",null,m[1]); b.type="button"; b.dataset.m=m[0];
+    if(m[0]==="pct"&&!hasNorm){ b.disabled=true; b.title="Add segment norms below to enable"; }
+    b.addEventListener("click",function(){ paint(m[0]); }); tog.appendChild(b);
+  });
+  var leg=el("div","bc-legend"); leg.appendChild(el("span",null,"Less")); leg.appendChild(el("span","bar")); leg.appendChild(el("span",null,"More lean")); wrap.appendChild(leg);
+  var leg2=el("div","bc-legend2"); leg2.innerHTML='<span class="ring"></span>weaker side of the pair — worth focusing here'; wrap.appendChild(leg2);
+  paint(hasNorm?"pct":"lbs");
+  return wrap;
+}
+function limbChangeChart(ib){
+  var wrap=el("div","chartcard");
+  wrap.appendChild(el("div","chart-lbl","How each segment has changed · lbs gained"));
+  if(ib.length<2){ wrap.appendChild(el("div","chart-empty","Needs 2+ scans")); return wrap; }
+  var series=[["rArm","R arm","#B5424F"],["lArm","L arm","#D99BA2"],["trunk","Trunk","#C67A33"],["rLeg","R leg","#5E7A4E"],["lLeg","L leg","#9CB07E"]];
+  var n=ib.length, mx=0.6, deltas={};
+  series.forEach(function(sr){ var base=pnum(ib[0][sr[0]]); deltas[sr[0]]=ib.map(function(e){ var v=pnum(e[sr[0]]); return (v==null||base==null)?null:v-base; }); deltas[sr[0]].forEach(function(v){ if(v!=null) mx=Math.max(mx,v); }); });
+  var W=280,H=150,padL=30,padR=10,padT=10,padB=24;
+  function X(i){ return padL+(n<=1?0:(i/(n-1))*(W-padL-padR)); }
+  function Y(v){ return H-padB-(v/mx)*(H-padT-padB); }
+  var s='<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="display:block">';
+  [0,mx/2,mx].forEach(function(g){ var y=Y(g); s+='<line x1="'+padL+'" y1="'+y.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+y.toFixed(1)+'" stroke="var(--hair)" stroke-width="1"/><text x="'+(padL-5)+'" y="'+(y+3).toFixed(1)+'" text-anchor="end" font-size="8" fill="var(--ink2)">+'+g.toFixed(1)+'</text>'; });
+  ib.forEach(function(e,i){ s+='<text x="'+X(i).toFixed(1)+'" y="'+(H-8)+'" text-anchor="middle" font-size="8.5" fill="var(--ink2)">'+(e.date||"")+'</text>'; });
+  series.forEach(function(sr){
+    var d=deltas[sr[0]], path="", started=false, lastI=-1;
+    d.forEach(function(v,i){ if(v==null)return; path+=(started?"L":"M")+X(i).toFixed(1)+" "+Y(v).toFixed(1)+" "; started=true; lastI=i; });
+    if(path) s+='<path d="'+path.trim()+'" fill="none" stroke="'+sr[2]+'" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>';
+    if(lastI>=0) s+='<circle cx="'+X(lastI).toFixed(1)+'" cy="'+Y(d[lastI]).toFixed(1)+'" r="3" fill="'+sr[2]+'"/>';
+  });
+  s+='</svg>';
+  var g=document.createElement("div"); g.innerHTML=s; wrap.appendChild(g.firstChild);
+  var lg=el("div","seg-legend"); lg.innerHTML=series.map(function(sr){ return '<span><i style="background:'+sr[2]+'"></i>'+sr[1]+'</span>'; }).join(""); wrap.appendChild(lg);
+  return wrap;
+}
 function fmsChart(e){
   var wrap=el("div","chartcard");
   wrap.appendChild(el("div","chart-lbl","FMS · "+(e.date||"")+"  ·  "+fmsTotal(e)+" / 21"));
@@ -1227,7 +1394,7 @@ function fmsChart(e){
   return wrap;
 }
 var INBODY_FIELDS=[["date","Date","text"],["weight","Weight","num"],["bodyFat","Body fat %","num"],["muscle","Skeletal muscle","num"],
-  ["lArm","L arm","num"],["rArm","R arm","num"],["lLeg","L leg","num"],["rLeg","R leg","num"],
+  ["lArm","L arm","num"],["rArm","R arm","num"],["trunk","Trunk lean","num"],["lLeg","L leg","num"],["rLeg","R leg","num"],
   ["restingHR","Resting HR","num"],["systolic","Systolic","num"],["diastolic","Diastolic","num"]];
 var FMS_FIELDS=[["date","Date"],["deepSquat","Deep Squat"],["hurdleL","Hurdle L"],["hurdleR","Hurdle R"],
   ["lungeL","Lunge L"],["lungeR","Lunge R"],["shoulderL","Shoulder L"],["shoulderR","Shoulder R"],
@@ -1239,7 +1406,10 @@ async function loadProfile(){
 }
 function renderProfile(){
   var host=$("tab-profile"); host.textContent="";
-  host.appendChild(el("p","note","InBody and FMS tracking. Enter numbers and the charts build themselves."));
+  host.appendChild(el("p","note","InBody and FMS tracking. Enter numbers and the charts build themselves. This is what the client sees on their Progress page too."));
+
+  /* schedule & reminders */
+  host.appendChild(scheduleBlock());
 
   /* charts */
   var ib=sortByDate(PROFILE.inbody);
@@ -1247,8 +1417,9 @@ function renderProfile(){
   charts.appendChild(svgLineChart(ib,"weight","Weight",""));
   charts.appendChild(svgLineChart(ib,"bodyFat","Body fat %","%"));
   charts.appendChild(svgLineChart(ib,"muscle","Skeletal muscle",""));
-  if(ib.length) charts.appendChild(segmentBars(ib[ib.length-1]));
   host.appendChild(charts);
+  host.appendChild(bodyFigureCard(ib, PROFILE.norms));
+  host.appendChild(limbChangeChart(ib));
   var fmsSorted=sortByDate(PROFILE.fms);
   if(fmsSorted.length){ host.appendChild(fmsChart(fmsSorted[fmsSorted.length-1])); }
 
@@ -1289,6 +1460,35 @@ function renderProfile(){
     });
     host.appendChild(gal);
   }
+}
+function scheduleBlock(){
+  var sc=PROFILE.schedule, nm=PROFILE.norms;
+  var card=el("div","bodycard");
+  card.appendChild(el("div","bc-t","Schedule & reminders"));
+  card.appendChild(el("p","note","Set the program length and how often to re-scan. You'll get a reminder on your Clients page when one's due."));
+  function fld(label,type,val,onch,attrs,rerender){
+    var f=el("div","sched-fld"); f.appendChild(el("span",null,label));
+    var i=document.createElement("input"); i.type=type; if(val!=null)i.value=val;
+    if(attrs)Object.keys(attrs).forEach(function(k){i.setAttribute(k,attrs[k]);});
+    i.addEventListener("change",function(){ onch(i.value); saveProfileSoon(); if(rerender)renderProfile(); });
+    f.appendChild(i); return f;
+  }
+  var grid=el("div","sched-grid");
+  grid.appendChild(fld("Program start","date",sc.start||"",function(v){sc.start=v;}));
+  grid.appendChild(fld("Program length (weeks)","number",sc.weeks!=null?sc.weeks:8,function(v){sc.weeks=pint(v)||null;},{min:1,step:1}));
+  grid.appendChild(fld("Redo InBody every (weeks)","number",sc.inbodyWeeks!=null?sc.inbodyWeeks:6,function(v){sc.inbodyWeeks=pint(v)||null;},{min:1,step:1}));
+  card.appendChild(grid);
+  var tg=el("label","sched-toggle");
+  var cb=document.createElement("input"); cb.type="checkbox"; cb.checked=sc.inbodyRemind!==false;
+  cb.addEventListener("change",function(){ sc.inbodyRemind=cb.checked; saveProfileSoon(); });
+  tg.appendChild(cb); tg.appendChild(document.createTextNode(" Remind me to re-scan this client")); card.appendChild(tg);
+  card.appendChild(el("p","note","Optional: segment 'normal' values from the InBody sheet. Enter these to unlock the % of normal view on the body map."));
+  var ng=el("div","sched-grid");
+  [["rArm","R arm"],["lArm","L arm"],["trunk","Trunk"],["rLeg","R leg"],["lLeg","L leg"]].forEach(function(p){
+    ng.appendChild(fld(p[1]+" norm","number",nm[p[0]]!=null?nm[p[0]]:"",function(v){nm[p[0]]=v===""?null:pnum(v);},{step:"0.1"},true));
+  });
+  card.appendChild(ng);
+  return card;
 }
 function entryTable(arr, fields, onchange, isFms){
   var wrap=el("div","tblwrap");
