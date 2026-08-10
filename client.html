@@ -480,6 +480,8 @@ async function pullMeta(){
 }
 /* ---------- done / sessions (flat mode) ---------- */
 function isoToday(){ var d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+/* Monday 00:00 (local) that starts the current week — flat checkmarks reset here, not daily */
+function weekStartIso(){ var d=new Date(); var day=d.getDay(); d.setDate(d.getDate()-(day===0?6:day-1)); d.setHours(0,0,0,0); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function isoToMD(iso){ var p=(iso||"").split("-"); return p.length===3?(parseInt(p[1],10)+"/"+parseInt(p[2],10)):iso; }
 var SESS={byDate:{}, doneToday:{}, lastDone:{}};
 async function pullSessions(){
@@ -488,10 +490,10 @@ async function pullSessions(){
     var r=await fetch(sbUrl("/rest/v1/session_log?client_slug=eq."+encodeURIComponent(SLUG)+"&select=*&order=log_date.desc"),{headers:sbHeaders()});
     if(!r.ok) return;
     var data=await r.json(); SESS={byDate:{},doneToday:{},lastDone:{}};
-    var today=isoToday();
+    var wk=weekStartIso();
     data.forEach(function(e){
       (SESS.byDate[e.log_date]=SESS.byDate[e.log_date]||[]).push({id:e.exercise_id,name:e.exercise_name});
-      if(e.log_date===today) SESS.doneToday[e.exercise_id]=true;
+      if(e.log_date>=wk) SESS.doneToday[e.exercise_id]=true;
       if(!SESS.lastDone[e.exercise_id] || e.log_date>SESS.lastDone[e.exercise_id]) SESS.lastDone[e.exercise_id]=e.log_date;
     });
   }catch(e){}
@@ -509,8 +511,9 @@ function toggleDone(exId, name){
       body:JSON.stringify([{client_slug:SLUG,log_date:today,exercise_id:exId,exercise_name:name}])}).catch(function(){});
   }else{
     delete SESS.doneToday[exId];
-    if(SESS.byDate[today]) SESS.byDate[today]=SESS.byDate[today].filter(function(x){return x.id!==exId;});
-    if(cloudEnabled()) fetch(sbUrl("/rest/v1/session_log?client_slug=eq."+encodeURIComponent(SLUG)+"&log_date=eq."+today+"&exercise_id=eq."+encodeURIComponent(exId)),{
+    var ws=weekStartIso();
+    Object.keys(SESS.byDate).forEach(function(d){ if(d>=ws) SESS.byDate[d]=SESS.byDate[d].filter(function(x){return x.id!==exId;}); });
+    if(cloudEnabled()) fetch(sbUrl("/rest/v1/session_log?client_slug=eq."+encodeURIComponent(SLUG)+"&exercise_id=eq."+encodeURIComponent(exId)+"&log_date=gte."+ws),{
       method:"DELETE",headers:sbHeaders()}).catch(function(){});
   }
   return now;
@@ -700,7 +703,11 @@ function chipBarFor(ex,container){
                     .replace(/^\s*,\s*/,"").replace(/\s*,\s*$/,"").trim());
       }else{ setCell(ni,cur?cur+", "+text:text); }
     }
-    ["WU","bi","uni","ES","kg","lbs"].forEach(function(t){
+    ["WU","bi","uni"].forEach(function(t){
+      chip(t,function(){toggleTok(wi,t);},function(){return hasTok(wi,t);});
+    });
+    chip("ES",function(){toggleTok(ni,"ES");},function(){return hasTok(ni,"ES");});   /* each side → Reps column */
+    ["kg","lbs"].forEach(function(t){
       chip(t,function(){toggleTok(wi,t);},function(){return hasTok(wi,t);});
     });
     chip("L weaker",function(){toggleNote("L weaker");},function(){return getCell(ni).indexOf("L weaker")>=0;});
@@ -1283,18 +1290,17 @@ function renderExerciseFlat(ex){
   if(SESS.doneToday[ex.id]) exd.classList.add("doneToday");
   var esum=el("summary");
   var done=el("button","donebox"+(SESS.doneToday[ex.id]?" done":"")); done.type="button";
-  done.title="Mark done today"; done.setAttribute("aria-label","Mark "+ex.name+" done today");
+  done.title="Mark done this week"; done.setAttribute("aria-label","Mark "+ex.name+" done this week");
   done.addEventListener("click",function(e){
     e.preventDefault(); e.stopPropagation();
     var now=toggleDone(ex.id,ex.name);
     done.classList.toggle("done",now); exd.classList.toggle("doneToday",now);
     renderSessions(); updateOverdue();
-    toast(now?"Nice — logged for today":"Unmarked");
+    toast(now?"Nice — logged":"Unmarked");
   });
   esum.appendChild(done);
   esum.appendChild(el("span","chev"));
-  esum.appendChild(el("h3",null,ex.name));
-  var ss=supersetTag(ex.name||""); if(ss)esum.appendChild(el("span","sstag",ss));
+  esum.appendChild(el("h3",null,flatDisplayName(ex.name)));
   if(ex.demo)esum.appendChild(el("span","demotag","demo"));
   var flag=el("button","flagbtn","⚑"); flag.type="button"; flag.title="Mark to revisit";
   flag.addEventListener("click",function(e){
@@ -1348,6 +1354,7 @@ function updateOverdue(){
   showOverdueBanner(n);
 }
 function flatSortKey(name){ return (name||"").replace(/^\d+\/\d+\s+/,"").toLowerCase().trim(); }
+function flatDisplayName(name){ return (name||"").replace(/^\d+\/\d+\s+/,""); }
 function buildFlat(content){
   document.documentElement.classList.add("flatmode");
   flatNodes={};
