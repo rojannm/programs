@@ -998,7 +998,9 @@ function renderLogBlock(ex,rows){
     function chip(label,on,fn){ var b=el("button","chip"+(on()?" on":""),label); b.type="button";
       b.addEventListener("mousedown",function(e){e.preventDefault();});
       b.addEventListener("click",function(){ pushLogHistory(); fn(); b.classList.toggle("on",on()); }); chiptd.appendChild(b); }
-    ["WU","bi","uni","ES","kg","lbs"].forEach(function(t){ chip(t,function(){return has(wi,t);},function(){tok(wi,t);}); });
+    ["WU","bi","uni"].forEach(function(t){ chip(t,function(){return has(wi,t);},function(){tok(wi,t);}); });
+    chip("ES",function(){return has(ni,"ES");},function(){tok(ni,"ES");});   /* each side → Reps column */
+    ["kg","lbs"].forEach(function(t){ chip(t,function(){return has(wi,t);},function(){tok(wi,t);}); });
     chip("L weaker",function(){return get(ni).indexOf("L weaker")>=0;},function(){note("L weaker");});
     chip("R weaker",function(){return get(ni).indexOf("R weaker")>=0;},function(){note("R weaker");});
   };
@@ -1038,7 +1040,8 @@ function renderLogBlock(ex,rows){
   add.addEventListener("click",function(){
     pushLogHistory();
     var cells=cols.map(function(){return "";});
-    var di=cols.indexOf("Date"); if(di>=0)cells[di]=todayMD();
+    var di=cols.indexOf("Date");
+    if(di>=0){ var hasToday=rows.some(function(r){return (r.cells[di]||"")===todayMD();}); cells[di]=hasToday?"-":todayMD(); }
     rows.push({cells:cells,by:"coach"}); logModel[ex.id]=rows;
     pushCoachRows(ex,rows); drawRows();
     var last=tb.querySelector('tr:last-child td'); if(last)last.focus();
@@ -1049,11 +1052,23 @@ function renderLogBlock(ex,rows){
     if(!rows.length){ toast("No previous session to copy"); return; }
     pushLogHistory();
     var di=cols.indexOf("Date"); if(di<0)di=0;
-    var start=rows.length-1; while(start>0 && !(rows[start].cells[di]||"").trim()) start--;
-    var copies=[];
-    for(var i=start;i<rows.length;i++){ var c=rows[i].cells.slice(); c[di]=(i===start)?todayMD():""; copies.push({cells:c,by:"coach"}); }
+    var si=cols.indexOf("Set");
+    var hasToday=rows.some(function(r){return (r.cells[di]||"")===todayMD();});
+    var copies;
+    if(hasToday){
+      /* same-day: add one set, carry weight/reps, date "-", set number +1 */
+      var last=rows[rows.length-1].cells.slice();
+      last[di]="-";
+      if(si>=0){ var m=(last[si]||"").match(/\d+/); last[si]=m?String(parseInt(m[0],10)+1):last[si]; }
+      copies=[{cells:last,by:"coach"}];
+    }else{
+      /* new session: copy last logged session, first row today, continuation rows "-" */
+      var start=rows.length-1; while(start>0 && !(rows[start].cells[di]||"").trim()) start--;
+      copies=[];
+      for(var i=start;i<rows.length;i++){ var c=rows[i].cells.slice(); c[di]=(i===start)?todayMD():"-"; copies.push({cells:c,by:"coach"}); }
+    }
     rows.push.apply(rows,copies); logModel[ex.id]=rows;
-    pushCoachRows(ex,rows); drawRows(); toast("Last session copied");
+    pushCoachRows(ex,rows); drawRows(); toast(hasToday?"Next set added":"Last session copied");
   });
   actions.appendChild(same);
   var cpy=el("button","addrow","Copy"); cpy.type="button"; cpy.title="Copy this exercise's log as text";
