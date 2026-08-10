@@ -131,6 +131,25 @@ details.exercise.overdue > summary h3{color:var(--danger)}
 .sess-chip{display:inline-flex;align-items:center;gap:4px;background:var(--card);border:1px solid var(--hair);border-radius:999px;padding:3px 6px 3px 10px;font-size:.82rem}
 .sess-chip .sess-x{border:none;background:transparent;color:var(--ink2);cursor:pointer;font-size:.9rem;line-height:1;padding:0 2px}
 .sess-chip .sess-x:hover{color:var(--accent)}
+/* non-negotiable tag + inline edit controls */
+.nnbtn,.penbtn{border:none;background:transparent;cursor:pointer;flex:0 0 auto;line-height:1;padding:2px 4px;color:var(--ink2);font-size:1rem}
+.nnbtn.on{color:var(--accent)}
+.penbtn{font-size:.9rem}
+.nnbtn:hover,.penbtn:hover{color:var(--accent)}
+details.exercise.isnonneg > summary h3{color:var(--accent)}
+details.exercise.isnonneg > summary h3::after{content:"non-negotiable";font-family:"Hanken Grotesk",sans-serif;font-size:.54rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);background:var(--accent-soft);border-radius:4px;padding:2px 5px;margin-left:8px;vertical-align:middle;white-space:nowrap}
+/* currently working on */
+.wo-card{background:var(--inset);border:1px solid var(--hair);border-radius:12px;padding:12px 14px;margin:0 0 12px}
+.wo-lbl{font-size:.62rem;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:var(--accent);margin-bottom:8px}
+.wo-list{display:flex;flex-direction:column;gap:4px}
+.wo-item{display:flex;align-items:center;gap:8px}
+.wo-num{font-family:"Fraunces",serif;font-weight:600;color:var(--accent);min-width:16px;font-variant-numeric:tabular-nums}
+.wo-txt{flex:1;font-size:.95rem;padding:2px 4px;border-radius:4px}
+.wo-txt:focus{outline:none;background:var(--accent-soft)}
+.wo-btn{border:none;background:transparent;color:var(--ink2);cursor:pointer;font-size:.95rem;line-height:1;padding:2px 5px}
+.wo-btn:hover{color:var(--accent)}
+.wo-add{margin-top:8px;border:1px dashed var(--hair);background:transparent;color:var(--ink2);border-radius:8px;padding:6px 10px;font:inherit;font-size:.82rem;font-weight:600;cursor:pointer}
+.wo-add:hover{border-color:var(--accent);color:var(--accent)}
 .btn:focus-visible,summary:focus-visible,[contenteditable]:focus-visible,.warmcheck:focus-visible,.chip:focus-visible{
   outline:2px solid var(--accent);outline-offset:2px}
 #syncpill{font-size:.8rem;color:var(--ink2);margin:0 0 12px;padding-left:4px;min-height:1.2em}
@@ -1310,8 +1329,19 @@ function renderExerciseFlat(ex){
   });
   esum.appendChild(done);
   esum.appendChild(el("span","chev"));
-  esum.appendChild(el("h3",null,flatDisplayName(ex.name)));
+  if(isNonneg(ex.id)) exd.classList.add("isnonneg");
+  var h3=el("h3",null,flatDisplayName(ex.name,ex.id));
+  h3.addEventListener("click",function(e){ if(h3.isContentEditable) e.stopPropagation(); });
+  esum.appendChild(h3);
   if(ex.demo)esum.appendChild(el("span","demotag","demo"));
+  if(CAN_EDIT_FLAT){
+    var star=el("button","nnbtn"+(isNonneg(ex.id)?" on":""), isNonneg(ex.id)?"★":"☆"); star.type="button"; star.title="Non-negotiable";
+    star.addEventListener("click",function(e){ e.preventDefault(); e.stopPropagation(); toggleNonneg(ex.id); var on=isNonneg(ex.id); star.classList.toggle("on",on); star.textContent=on?"★":"☆"; exd.classList.toggle("isnonneg",on); });
+    esum.appendChild(star);
+    var pen=el("button","penbtn","✎"); pen.type="button"; pen.title="Rename this exercise";
+    pen.addEventListener("click",function(e){ e.preventDefault(); e.stopPropagation(); startRename(h3,ex); });
+    esum.appendChild(pen);
+  }
   var flag=el("button","flagbtn","⚑"); flag.type="button"; flag.title="Mark to revisit";
   flag.addEventListener("click",function(e){
     e.preventDefault(); e.stopPropagation();
@@ -1415,7 +1445,73 @@ function updateOverdue(){
   showOverdueBanner(n);
 }
 function flatSortKey(name){ return (name||"").replace(/^\d+\/\d+\s+/,"").toLowerCase().trim(); }
-function flatDisplayName(name){ return (name||"").replace(/^\d+\/\d+\s+/,""); }
+function flatDisplayName(name,id){ var n=(id&&FLAT.renames&&FLAT.renames[id])||name||""; return n.replace(/^\d+\/\d+\s+/,""); }
+/* ---- flat overlay: her own edits (non-negotiable tags, working-on list, renames) ---- */
+var FLAT={nonneg:[],workingOn:[],renames:{}};
+var CAN_EDIT_FLAT=false;
+var flatTimer=null;
+function isNonneg(id){ return FLAT.nonneg && FLAT.nonneg.indexOf(id)>=0; }
+function toggleNonneg(id){ FLAT.nonneg=FLAT.nonneg||[]; var i=FLAT.nonneg.indexOf(id); if(i>=0)FLAT.nonneg.splice(i,1); else FLAT.nonneg.push(id); saveFlatSoon(); }
+async function fetchFlatOverlay(){
+  if(!cloudEnabled()) return;
+  try{
+    var r=await fetch(sbUrl("/rest/v1/client_flat?client_slug=eq."+encodeURIComponent(SLUG)+"&select=data"),{headers:sbHeaders()});
+    if(!r.ok) return; var a=await r.json();
+    if(a.length){ var d={}; try{ d=JSON.parse(a[0].data||"{}"); }catch(e){} FLAT.nonneg=d.nonneg||[]; FLAT.workingOn=d.workingOn||[]; FLAT.renames=d.renames||{}; }
+  }catch(e){}
+}
+function saveFlatSoon(){ clearTimeout(flatTimer); flatTimer=setTimeout(saveFlat,700); }
+function saveFlat(){
+  if(!cloudEnabled()) return;
+  fetch(sbUrl("/rest/v1/client_flat?on_conflict=client_slug"),{
+    method:"POST",headers:sbHeaders({"Prefer":"resolution=merge-duplicates,return=minimal"}),
+    body:JSON.stringify([{client_slug:SLUG,data:JSON.stringify({nonneg:FLAT.nonneg,workingOn:FLAT.workingOn,renames:FLAT.renames}),updated_at:new Date().toISOString()}])
+  }).catch(function(){});
+}
+function renderWorkingOn(host){
+  host.textContent="";
+  var wrap=el("div","wo-card");
+  wrap.appendChild(el("div","wo-lbl","Currently working on"));
+  var listEl=el("div","wo-list");
+  (FLAT.workingOn||[]).forEach(function(item,i){
+    var row=el("div","wo-item");
+    row.appendChild(el("span","wo-num",String(i+1)));
+    var txt=el("span","wo-txt",item);
+    if(CAN_EDIT_FLAT){ makeEditable(txt);
+      txt.addEventListener("blur",function(){ var v=txt.textContent.trim(); if(!v){ FLAT.workingOn.splice(i,1); saveFlat(); renderWorkingOn(host); } else if(v!==item){ FLAT.workingOn[i]=v; saveFlatSoon(); } });
+      txt.addEventListener("keydown",function(k){ if(k.key==="Enter"){ k.preventDefault(); txt.blur(); } });
+    }
+    row.appendChild(txt);
+    if(CAN_EDIT_FLAT){
+      var up=el("button","wo-btn","↑"); up.type="button"; up.title="Move up";
+      up.addEventListener("click",function(){ if(i>0){ var a=FLAT.workingOn,t=a[i-1]; a[i-1]=a[i]; a[i]=t; saveFlatSoon(); renderWorkingOn(host); } });
+      var rm=el("button","wo-btn","×"); rm.type="button"; rm.title="Remove";
+      rm.addEventListener("click",function(){ FLAT.workingOn.splice(i,1); saveFlatSoon(); renderWorkingOn(host); });
+      row.appendChild(up); row.appendChild(rm);
+    }
+    listEl.appendChild(row);
+  });
+  wrap.appendChild(listEl);
+  if(CAN_EDIT_FLAT){
+    var add=el("button","wo-add","+ Add a focus"); add.type="button";
+    add.addEventListener("click",function(){ FLAT.workingOn=FLAT.workingOn||[]; FLAT.workingOn.push(""); saveFlatSoon(); renderWorkingOn(host); var last=host.querySelector(".wo-item:last-child .wo-txt"); if(last)last.focus(); });
+    wrap.appendChild(add);
+  }
+  host.appendChild(wrap);
+}
+function startRename(h3,ex){
+  h3.contentEditable="true"; h3.focus();
+  var sel=window.getSelection&&window.getSelection(); if(sel&&sel.selectAllChildren){ try{ sel.selectAllChildren(h3); }catch(e){} }
+  function finish(){
+    h3.contentEditable="false"; h3.removeEventListener("blur",finish);
+    var v=h3.textContent.trim(), base=(ex.name||"").replace(/^\d+\/\d+\s+/,"");
+    if(!v){ h3.textContent=flatDisplayName(ex.name,ex.id); return; }
+    if(v===base){ delete FLAT.renames[ex.id]; } else { FLAT.renames[ex.id]=v; }
+    saveFlatSoon();
+  }
+  h3.addEventListener("blur",finish);
+  h3.addEventListener("keydown",function(k){ if(k.key==="Enter"){ k.preventDefault(); h3.blur(); } });
+}
 function buildFlat(content){
   document.documentElement.classList.add("flatmode");
   flatNodes={};
@@ -1423,7 +1519,25 @@ function buildFlat(content){
   list.forEach(function(ex){ exIndex[ex.id]=ex; if(ex.variants) ex.variants.forEach(function(v){ exIndex[v.id]=v; }); });
   list.sort(function(a,b){ var ka=flatSortKey(a.name), kb=flatSortKey(b.name); return ka<kb?-1:ka>kb?1:0; });
 
+  CAN_EDIT_FLAT = !PROG.readonlyFlat;   /* her own page is editable; grocery-list clients (Stage 5) are read-only */
+
+  /* one-time migration: turn the old coach non-negotiable list into per-exercise tags */
+  if((!FLAT.nonneg||!FLAT.nonneg.length) && PROG.nonneg && PROG.nonneg.length){
+    FLAT.nonneg=[];
+    PROG.nonneg.forEach(function(nm){
+      var t=(nm||"").toLowerCase().replace(/^\d+\/\d+\s+/,"").trim();
+      var m=list.find(function(ex){ return flatDisplayName(ex.name,ex.id).toLowerCase().trim()===t; });
+      if(m && FLAT.nonneg.indexOf(m.id)<0) FLAT.nonneg.push(m.id);
+    });
+    if(FLAT.nonneg.length) saveFlatSoon();
+  }
+  if(CAN_EDIT_FLAT && (!FLAT.workingOn||!FLAT.workingOn.length)){ FLAT.workingOn=["Leg raises"]; saveFlatSoon(); }
+
   content.appendChild(makeOverdueBanner());
+
+  if(CAN_EDIT_FLAT || (FLAT.workingOn&&FLAT.workingOn.length)){
+    var woHost=el("div"); woHost.id="workingOnHost"; content.appendChild(woHost); renderWorkingOn(woHost);
+  }
 
   var sess=el("details","section"); sess.id="sec-sessions";
   var sh=el("summary"); sh.appendChild(el("span","chev")); sh.appendChild(el("h2",null,"Sessions")); sh.appendChild(el("span","count",""));
@@ -1433,13 +1547,6 @@ function buildFlat(content){
 
   var flat=el("div","flatlist section");
   flat.style.cssText="overflow:hidden";
-  if(PROG.nonneg && PROG.nonneg.length){
-    var nnWrap=el("div","nonneg-inline");
-    nnWrap.appendChild(el("div","nonneg-lbl","Non-negotiables"));
-    PROG.nonneg.slice().sort(function(a,b){var la=(a||"").toLowerCase(),lb=(b||"").toLowerCase();return la<lb?-1:la>lb?1:0;})
-      .forEach(function(t){ var row=el("div","nonneg-item"); row.textContent=t; nnWrap.appendChild(row); });
-    flat.appendChild(nnWrap);
-  }
   list.forEach(function(ex){ flat.appendChild(renderExerciseFlat(ex)); });
   content.appendChild(flat);
 
@@ -1580,7 +1687,7 @@ async function boot(){
   }
   try{ await pullMeta(); }catch(e){}
   try{ await pullNutrition(); }catch(e){}
-  if(PROG.flat){ try{ await pullSessions(); }catch(e){} }
+  if(PROG.flat){ try{ await pullSessions(); }catch(e){} try{ await fetchFlatOverlay(); }catch(e){} }
   build();
   try{
     await pullLogs();
