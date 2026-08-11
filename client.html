@@ -131,6 +131,12 @@ details.exercise.overdue > summary h3{color:var(--danger)}
 .sess-chip{display:inline-flex;align-items:center;gap:4px;background:var(--card);border:1px solid var(--hair);border-radius:999px;padding:3px 6px 3px 10px;font-size:.82rem}
 .sess-chip .sess-x{border:none;background:transparent;color:var(--ink2);cursor:pointer;font-size:.9rem;line-height:1;padding:0 2px}
 .sess-chip .sess-x:hover{color:var(--accent)}
+.modetoggle{display:flex;align-items:center;gap:10px;margin:0 0 14px}
+.mt-lbl{font-size:.66rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink2)}
+.mt-seg{display:inline-flex;border:1px solid var(--hair);border-radius:999px;overflow:hidden;background:var(--card)}
+.mt-btn{font:inherit;font-size:.82rem;font-weight:600;border:none;background:transparent;color:var(--ink2);padding:7px 16px;cursor:pointer}
+.mt-btn.on{background:var(--green);color:var(--bg)}
+:root[data-theme="night"] .mt-btn.on,:root[data-theme="dark"] .mt-btn.on{color:var(--inset)}
 /* non-negotiable tag + inline edit controls */
 .nnbtn,.penbtn{border:none;background:transparent;cursor:pointer;flex:0 0 auto;line-height:1;padding:2px 4px;color:var(--ink2);font-size:1rem}
 .nnbtn.on{color:var(--accent)}
@@ -899,6 +905,8 @@ function build(){
   content.textContent="";
   exIndex={};
 
+  if(!NATIVE_FLAT) content.appendChild(modeToggle());
+
   if(!PROG.flat){
     var keys=el("details","section"); keys.id="sec-keys";
     var ksum=el("summary"); ksum.appendChild(el("span","chev"));
@@ -1447,8 +1455,9 @@ function updateOverdue(){
 function flatSortKey(name){ return (name||"").replace(/^\d+\/\d+\s+/,"").toLowerCase().trim(); }
 function flatDisplayName(name,id){ var n=(id&&FLAT.renames&&FLAT.renames[id])||name||""; return n.replace(/^\d+\/\d+\s+/,""); }
 /* ---- flat overlay: her own edits (non-negotiable tags, working-on list, renames) ---- */
-var FLAT={nonneg:[],workingOn:[],renames:{}};
+var FLAT={nonneg:[],workingOn:[],renames:{},mode:"structured"};
 var CAN_EDIT_FLAT=false;
+var NATIVE_FLAT=false;   /* rojan's own page is flat by design; grocery clients toggle in */
 var flatTimer=null;
 function isNonneg(id){ return FLAT.nonneg && FLAT.nonneg.indexOf(id)>=0; }
 function toggleNonneg(id){ FLAT.nonneg=FLAT.nonneg||[]; var i=FLAT.nonneg.indexOf(id); if(i>=0)FLAT.nonneg.splice(i,1); else FLAT.nonneg.push(id); saveFlatSoon(); }
@@ -1457,7 +1466,7 @@ async function fetchFlatOverlay(){
   try{
     var r=await fetch(sbUrl("/rest/v1/client_flat?client_slug=eq."+encodeURIComponent(SLUG)+"&select=data"),{headers:sbHeaders()});
     if(!r.ok) return; var a=await r.json();
-    if(a.length){ var d={}; try{ d=JSON.parse(a[0].data||"{}"); }catch(e){} FLAT.nonneg=d.nonneg||[]; FLAT.workingOn=d.workingOn||[]; FLAT.renames=d.renames||{}; }
+    if(a.length){ var d={}; try{ d=JSON.parse(a[0].data||"{}"); }catch(e){} FLAT.nonneg=d.nonneg||[]; FLAT.workingOn=d.workingOn||[]; FLAT.renames=d.renames||{}; FLAT.mode=d.mode||"structured"; }
   }catch(e){}
 }
 function saveFlatSoon(){ clearTimeout(flatTimer); flatTimer=setTimeout(saveFlat,700); }
@@ -1465,7 +1474,7 @@ function saveFlat(){
   if(!cloudEnabled()) return;
   fetch(sbUrl("/rest/v1/client_flat?on_conflict=client_slug"),{
     method:"POST",headers:sbHeaders({"Prefer":"resolution=merge-duplicates,return=minimal"}),
-    body:JSON.stringify([{client_slug:SLUG,data:JSON.stringify({nonneg:FLAT.nonneg,workingOn:FLAT.workingOn,renames:FLAT.renames}),updated_at:new Date().toISOString()}])
+    body:JSON.stringify([{client_slug:SLUG,data:JSON.stringify({nonneg:FLAT.nonneg,workingOn:FLAT.workingOn,renames:FLAT.renames,mode:FLAT.mode}),updated_at:new Date().toISOString()}])
   }).catch(function(){});
 }
 function renderWorkingOn(host){
@@ -1511,6 +1520,34 @@ function startRename(h3,ex){
   }
   h3.addEventListener("blur",finish);
   h3.addEventListener("keydown",function(k){ if(k.key==="Enter"){ k.preventDefault(); h3.blur(); } });
+}
+/* ---- grocery-list mode: a structured client can flip to the flat pick-and-choose view ---- */
+function applyGroceryMode(){
+  if(NATIVE_FLAT) return;                 /* rojan's own page is always flat */
+  if(FLAT.mode==="grocery"){ PROG.flat=true; PROG.readonlyFlat=true; }
+  else { PROG.flat=false; }
+}
+async function switchMode(mode){
+  if(NATIVE_FLAT) return;
+  FLAT.mode=mode; saveFlat();
+  applyGroceryMode();
+  if(!PROG.flat) document.documentElement.classList.remove("flatmode");
+  if(PROG.flat){ try{ await pullSessions(); }catch(e){} }
+  build();
+  try{ await pullLogs(); refreshAllOpenTables(); if(PROG.flat){ updateOverdue(); } else { updateOverdueAll(); } }catch(e){}
+  toast(mode==="grocery"?"Grocery-list view":"Structured view");
+}
+function modeToggle(){
+  var wrap=el("div","modetoggle");
+  wrap.appendChild(el("span","mt-lbl","View"));
+  var seg=el("div","mt-seg");
+  [["structured","Structured"],["grocery","Grocery list"]].forEach(function(m){
+    var b=el("button","mt-btn"+(FLAT.mode===m[0]?" on":""),m[1]); b.type="button";
+    b.addEventListener("click",function(){ if(FLAT.mode!==m[0]) switchMode(m[0]); });
+    seg.appendChild(b);
+  });
+  wrap.appendChild(seg);
+  return wrap;
 }
 function buildFlat(content){
   document.documentElement.classList.add("flatmode");
@@ -1687,7 +1724,10 @@ async function boot(){
   }
   try{ await pullMeta(); }catch(e){}
   try{ await pullNutrition(); }catch(e){}
-  if(PROG.flat){ try{ await pullSessions(); }catch(e){} try{ await fetchFlatOverlay(); }catch(e){} }
+  NATIVE_FLAT = !!PROG.flat;
+  try{ await fetchFlatOverlay(); }catch(e){}
+  applyGroceryMode();
+  if(PROG.flat){ try{ await pullSessions(); }catch(e){} }
   build();
   try{
     await pullLogs();
