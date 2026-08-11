@@ -105,6 +105,16 @@ textarea{min-height:120px;resize:vertical}
 .mini{font-size:.78rem;color:var(--ink2)}
 .dayhdr{font-size:.78rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
   color:var(--ink2);margin:18px 0 4px;border-bottom:1px solid var(--hair);padding-bottom:4px}
+.logday{border:1px solid var(--hair);border-radius:12px;margin:12px 0;background:var(--card);overflow:hidden}
+.logday>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:12px 14px}
+.logday>summary::-webkit-details-marker{display:none}
+.logday>summary::before{content:"\25B8";color:var(--ink2);transition:transform .15s ease;display:inline-block;font-size:.9rem}
+.logday[open]>summary::before{transform:rotate(90deg)}
+.logday-t{font-family:"Fraunces",serif;font-size:1.05rem;color:var(--green);font-weight:500}
+.logday-n{margin-left:auto;font-size:.72rem;color:var(--ink2);font-weight:600}
+.logday[open]>summary{border-bottom:1px solid var(--hair-soft)}
+.logday .exblock{margin:12px}
+.logday.nomatch{display:none}
 .exblock{margin:14px 0}
 .exblock h3{font-size:.95rem;font-weight:700;margin:0 0 6px}
 .exblock .meta{color:var(--ink2);font-weight:500;font-size:.8rem;margin-left:6px}
@@ -176,7 +186,6 @@ tr.chipbar td{background:var(--bg2);padding:6px 10px}
 .gal-cell img{width:100%;height:120px;object-fit:cover;display:block}
 .gal-cap{display:flex;justify-content:space-between;align-items:center;padding:4px 8px;font-size:.72rem;color:var(--ink2)}
 .prof-upload{margin-top:4px}
-.logframe{width:100%;height:calc(100vh - 210px);min-height:520px;border:1px solid var(--hair);border-radius:12px;background:var(--card);display:block}
 .bodycard{border:1px solid var(--hair);border-radius:14px;padding:14px;background:var(--card);margin:6px 0 14px}
 .bc-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap}
 .bc-t{font-family:"Fraunces",serif;font-weight:500;font-size:1.05rem;color:var(--ink)}
@@ -432,7 +441,7 @@ function showTab(name){
   ["program","logs","messages","nutrition","profile","private","access"].forEach(function(n){
     $("tab-"+n).style.display=(n===name)?"":"none";
   });
-  if(name==="logs")loadLogsFrame();
+  if(name==="logs")loadLogs();
   if(name==="messages")loadMessages();
   if(name==="nutrition")loadNutrition();
   if(name==="profile")loadProfile();
@@ -849,16 +858,6 @@ function exById(){
   });
   return map;
 }
-function loadLogsFrame(){
-  var host=$("tab-logs"); host.textContent="";
-  var tok=tokenFor(currentSlug);
-  if(!tok){ host.appendChild(el("p","note","This client's link is revoked. Restore it in the Access tab to log from here.")); return; }
-  host.appendChild(el("p","note","You're in the client's own view — same logging, collapsible days, same dates they see. Edits save straight to their log."));
-  var frame=document.createElement("iframe");
-  frame.className="logframe"; frame.title="Client logging view";
-  frame.src=siteBase()+"client.html?c="+encodeURIComponent(currentSlug)+"&k="+encodeURIComponent(tok)+"&coach=1";
-  host.appendChild(frame);
-}
 async function loadLogs(){
   var host=$("tab-logs"); host.textContent="Loading…";
   await loadMeta();
@@ -922,42 +921,51 @@ function renderLogsBody(){
     toast(any?"Flags cleared":"No flags");
   });
   bar.appendChild(clr);
+  var exp=el("button","btn small","Expand all"); exp.type="button";
+  exp.addEventListener("click",function(){ host.querySelectorAll(".logday").forEach(function(d){ d.open=true; }); });
+  var col=el("button","btn small","Collapse all"); col.type="button";
+  col.addEventListener("click",function(){ host.querySelectorAll(".logday").forEach(function(d){ d.open=false; }); });
+  bar.appendChild(exp); bar.appendChild(col);
   host.appendChild(bar);
   var search=document.createElement("input"); search.type="search"; search.id="logSearch";
   search.placeholder="Search exercises…";
   search.addEventListener("input",function(){
     var q=search.value.trim().toLowerCase();
-    host.querySelectorAll(".exblock").forEach(function(b){
-      var h=b.querySelector("h3"); var m=!q||(h&&h.textContent.toLowerCase().indexOf(q)>=0);
-      b.classList.toggle("nomatch",!m);
-    });
-    host.querySelectorAll(".dayhdr").forEach(function(hd){
-      var vis=false, n=hd.nextElementSibling;
-      while(n && !n.classList.contains("dayhdr")){ if(n.classList.contains("exblock")&&!n.classList.contains("nomatch"))vis=true; n=n.nextElementSibling; }
-      hd.style.display = (q&&!vis)?"none":"";
+    host.querySelectorAll(".logday").forEach(function(det){
+      var anyVis=false;
+      det.querySelectorAll(".exblock").forEach(function(b){
+        var h=b.querySelector("h3"); var m=!q||(h&&h.textContent.toLowerCase().indexOf(q)>=0);
+        b.classList.toggle("nomatch",!m); if(m)anyVis=true;
+      });
+      det.classList.toggle("nomatch",!!q&&!anyVis);
+      if(q&&anyVis) det.open=true;
     });
   });
   host.appendChild(search);
   var map=exById();
+  function dayBlock(label,n){
+    var det=el("details","logday"); det.open=true;
+    var sm=el("summary");
+    sm.appendChild(el("span","logday-t",label));
+    sm.appendChild(el("span","logday-n",n+(n===1?" exercise":" exercises")));
+    det.appendChild(sm); return det;
+  }
   (prog.cycles||[]).forEach(function(cy){
     (cy.days||[]).forEach(function(day){
-      var dayShown=false;
-      (day.exercises||[]).forEach(function(ex){
-        var rows=logModel[ex.id]||[];
-        if(!dayShown){
-          host.appendChild(el("p","dayhdr",(cy.label||"")+" · "+(day.title||day.id)));
-          dayShown=true;
-        }
-        host.appendChild(renderLogBlock(ex,rows));
-      });
+      var exs=day.exercises||[];
+      if(!exs.length) return;
+      var det=dayBlock((cy.label||"")+" · "+(day.title||day.id), exs.length);
+      exs.forEach(function(ex){ det.appendChild(renderLogBlock(ex, logModel[ex.id]||[])); });
+      host.appendChild(det);
     });
   });
   var orphans=Object.keys(logModel).filter(function(id){return !map[id];});
   if(orphans.length){
-    host.appendChild(el("p","dayhdr","Removed from program (history kept)"));
+    var det=dayBlock("Removed from program (history kept)", orphans.length);
     orphans.forEach(function(id){
-      host.appendChild(renderLogBlock({id:id,name:id,cols:["Date","Weight","Set","Reps"]},logModel[id]));
+      det.appendChild(renderLogBlock({id:id,name:id,cols:["Date","Weight","Set","Reps"]},logModel[id]));
     });
+    host.appendChild(det);
   }
   if(logNotesText){
     host.appendChild(el("p","dayhdr","Client notes for you"));
