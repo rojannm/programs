@@ -156,6 +156,16 @@ tr.chipbar td{background:var(--bg2);padding:6px 10px}
 .exblock.revisit{border-left:3px solid var(--danger);padding-left:8px;border-radius:4px}
 .badge{display:inline-block;min-width:16px;height:16px;line-height:16px;font-size:.62rem;font-weight:800;
   background:var(--danger);color:#fff;border-radius:999px;padding:0 5px;margin-left:5px;vertical-align:middle}
+.clientbadge{display:inline-block;min-width:18px;height:18px;line-height:18px;font-size:.64rem;font-weight:800;
+  background:var(--danger);color:#fff;border-radius:999px;padding:0 5px;margin-left:7px;vertical-align:middle}
+.mu-give{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0 4px}
+.mu-note{flex:1;min-width:180px;font:inherit;font-size:.9rem;color:var(--ink);background:var(--bg);border:1px solid var(--hair);border-radius:8px;padding:8px 10px}
+.mu-row{display:flex;align-items:center;gap:10px;border:1px solid var(--hair);border-radius:10px;padding:9px 12px;margin:7px 0;background:var(--card)}
+.mu-row.done{opacity:.6}
+.mu-kind{font-size:.66rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;padding:3px 8px;border-radius:999px;flex:0 0 auto}
+.mu-rep{background:var(--accent-soft);color:var(--accent)}
+.mu-add{background:var(--demo-soft);color:var(--demo)}
+.mu-txt{flex:1;font-size:.86rem;color:var(--ink2)}
 .msgcard{border:1px solid var(--hair);border-left:3px solid var(--accent);border-radius:10px;padding:10px 12px;margin:8px 0;background:var(--card)}
 .msgcard.resolved{border-left-color:var(--hair);opacity:.6}
 .msgmeta{font-size:.72rem;color:var(--ink2);margin-bottom:4px}
@@ -273,6 +283,7 @@ tr.chipbar td{background:var(--bg2);padding:6px 10px}
       <button class="tab" data-tab="messages" type="button">Messages<span id="msgBadge" class="badge" style="display:none"></span></button>
       <button class="tab" data-tab="nutrition" type="button">Nutrition</button>
       <button class="tab" data-tab="profile" type="button">Profile</button>
+      <button class="tab" data-tab="makeups" type="button">Make-ups<span id="muTabBadge" class="badge" style="display:none"></span></button>
       <button class="tab" data-tab="private" type="button">Private</button>
       <button class="tab" data-tab="access" type="button">Access</button>
     </div>
@@ -281,6 +292,7 @@ tr.chipbar td{background:var(--bg2);padding:6px 10px}
     <div id="tab-messages" style="display:none"></div>
     <div id="tab-nutrition" style="display:none"></div>
     <div id="tab-profile" style="display:none"></div>
+    <div id="tab-makeups" style="display:none"></div>
     <div id="tab-private" style="display:none"></div>
     <div id="tab-access" style="display:none"></div>
   </div>
@@ -366,6 +378,7 @@ async function connect(){
     setStatus("Connected. "+clientsList.length+" clients.","ok");
     renderClients();
     renderReminders();
+    refreshMakeupBadges();
     $("newClientBtn").style.display="";
     $("importNotesBtn").style.display="";
     var pre=new URLSearchParams(location.search).get("c");
@@ -423,6 +436,8 @@ function renderClients(){
     var b=el("button","clientbtn"+(tokenFor(c.client_slug)?"":" revoked")+(c.client_slug===currentSlug?" on":""),
       label);
     b.type="button";
+    var mc=makeupCounts[c.client_slug]||0;
+    if(mc>0){ var mb=el("span","clientbadge",String(mc)); mb.title=mc+" make-up"+(mc>1?"s":"")+" owed"; b.appendChild(mb); }
     b.addEventListener("click",function(){ selectClient(c.client_slug); });
     host.appendChild(b);
   });
@@ -436,6 +451,7 @@ async function selectClient(slug){
   $("clientTitle").textContent=slug;
   showTab("program");
   updateMsgBadge();
+  updateMakeupTabBadge();
   await loadProgram();
   renderProgramEditor();
 }
@@ -444,13 +460,14 @@ document.querySelectorAll(".tab").forEach(function(t){
 });
 function showTab(name){
   document.querySelectorAll(".tab").forEach(function(t){ t.classList.toggle("on",t.dataset.tab===name); });
-  ["program","logs","messages","nutrition","profile","private","access"].forEach(function(n){
+  ["program","logs","messages","nutrition","profile","makeups","private","access"].forEach(function(n){
     $("tab-"+n).style.display=(n===name)?"":"none";
   });
   if(name==="logs")loadLogs();
   if(name==="messages")loadMessages();
   if(name==="nutrition")loadNutrition();
   if(name==="profile")loadProfile();
+  if(name==="makeups")loadMakeups();
   if(name==="private")loadPrivate();
   if(name==="access")renderAccess();
 }
@@ -1140,6 +1157,95 @@ function pushCoachRows(ex,rows){
 }
 
 /* ---------- private tab ---------- */
+/* ---------- make-up inventory (coach-only) ---------- */
+var MAKEUPS=[];
+var makeupCounts={};
+async function fetchMakeups(){
+  try{
+    var r=await fetch(url("/rest/v1/client_makeups?client_slug=eq."+esc(currentSlug)+"&select=*&order=created_at.desc"),{headers:headers()});
+    if(!r.ok) return []; return await r.json();
+  }catch(e){ return []; }
+}
+async function loadMakeups(){
+  var host=$("tab-makeups"); host.textContent="Loading…";
+  MAKEUPS=await fetchMakeups();
+  renderMakeups();
+}
+function makeupLabel(k){ return k==="addition"?"Addition":"Replacement"; }
+function renderMakeups(){
+  var host=$("tab-makeups"); host.textContent="";
+  host.appendChild(el("p","note","Track make-ups you grant when a session gets pulled. A replacement swaps their next session, free. An addition means they add an extra session to use it. Just for you — clients don't see this."));
+  var give=el("div","mu-give");
+  var noteIn=document.createElement("input"); noteIn.type="text"; noteIn.placeholder="Optional note (e.g. sick 8/9)"; noteIn.className="mu-note"; noteIn.id="muNote";
+  var rep=el("button","btn","+ Give replacement"); rep.type="button"; rep.addEventListener("click",function(){ giveMakeup("replacement",noteIn.value); });
+  var add=el("button","btn quiet","+ Give addition"); add.type="button"; add.addEventListener("click",function(){ giveMakeup("addition",noteIn.value); });
+  give.appendChild(noteIn); give.appendChild(rep); give.appendChild(add);
+  host.appendChild(give);
+  var outstanding=MAKEUPS.filter(function(m){return !m.used;});
+  var used=MAKEUPS.filter(function(m){return m.used;});
+  host.appendChild(el("h3","prof-h","Outstanding ("+outstanding.length+")"));
+  if(!outstanding.length){ host.appendChild(el("p","note","None owed right now.")); }
+  outstanding.forEach(function(m){ host.appendChild(makeupRow(m,true)); });
+  if(used.length){
+    host.appendChild(el("h3","prof-h","History"));
+    used.forEach(function(m){ host.appendChild(makeupRow(m,false)); });
+  }
+}
+function makeupRow(m,outstanding){
+  var row=el("div","mu-row"+(outstanding?"":" done"));
+  row.appendChild(el("span","mu-kind mu-"+(m.kind==="addition"?"add":"rep"),makeupLabel(m.kind)));
+  var txt=el("span","mu-txt");
+  txt.textContent=(m.given_on?("given "+m.given_on):"")+(m.note?(" · "+m.note):"")+(m.used&&m.used_on?(" · used "+m.used_on):"");
+  row.appendChild(txt);
+  if(outstanding){
+    var use=el("button","btn small","Mark used"); use.type="button"; use.addEventListener("click",function(){ markUsed(m); });
+    row.appendChild(use);
+  }
+  var del=el("button","logdel","✕"); del.type="button"; del.title="Delete"; del.addEventListener("click",function(){ if(confirm("Delete this make-up?")) deleteMakeup(m); });
+  row.appendChild(del);
+  return row;
+}
+async function giveMakeup(kind,note){
+  try{
+    var r=await fetch(url("/rest/v1/client_makeups"),{method:"POST",headers:headers({"Prefer":"return=minimal"}),
+      body:JSON.stringify([{client_slug:currentSlug,kind:kind,note:(note||"").trim(),given_on:todayMD()}])});
+    if(!r.ok)throw 0;
+    var n=$("muNote"); if(n)n.value="";
+    toast("Make-up logged");
+    MAKEUPS=await fetchMakeups(); renderMakeups(); refreshMakeupBadges();
+  }catch(e){ toast("Could not save"); }
+}
+async function markUsed(m){
+  try{
+    var r=await fetch(url("/rest/v1/client_makeups?id=eq."+m.id),{method:"PATCH",headers:headers({"Prefer":"return=minimal"}),
+      body:JSON.stringify({used:true,used_on:todayMD()})});
+    if(!r.ok)throw 0;
+    toast("Marked used");
+    MAKEUPS=await fetchMakeups(); renderMakeups(); refreshMakeupBadges();
+  }catch(e){ toast("Failed"); }
+}
+async function deleteMakeup(m){
+  try{
+    var r=await fetch(url("/rest/v1/client_makeups?id=eq."+m.id),{method:"DELETE",headers:headers()});
+    if(!r.ok)throw 0;
+    toast("Deleted");
+    MAKEUPS=await fetchMakeups(); renderMakeups(); refreshMakeupBadges();
+  }catch(e){ toast("Failed"); }
+}
+async function refreshMakeupBadges(){
+  try{
+    var r=await fetch(url("/rest/v1/client_makeups?used=eq.false&select=client_slug"),{headers:headers()});
+    makeupCounts={};
+    if(r.ok){ (await r.json()).forEach(function(x){ makeupCounts[x.client_slug]=(makeupCounts[x.client_slug]||0)+1; }); }
+  }catch(e){}
+  renderClients();
+  updateMakeupTabBadge();
+}
+function updateMakeupTabBadge(){
+  var b=$("muTabBadge"); if(!b) return;
+  var n=currentSlug?(makeupCounts[currentSlug]||0):0;
+  if(n>0){ b.textContent=n; b.style.display=""; } else b.style.display="none";
+}
 var privTimer=null;
 async function loadPrivate(){
   var host=$("tab-private"); host.textContent="";
