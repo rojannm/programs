@@ -93,6 +93,13 @@ details.day.nomatch{display:none}
 details.exercise.revisit .flagbtn{color:var(--danger);opacity:1}
 details.exercise.revisit > summary{background:rgba(192,57,43,.10)}
 details.exercise.revisit > summary h3{color:var(--danger)}
+.flagbtn.on{color:var(--danger);opacity:1}
+details.exercise.flagged .flagbtn{color:var(--danger);opacity:1}
+details.exercise.flagged > summary{background:rgba(192,57,43,.10);border-left:3px solid var(--danger)}
+details.exercise.flagged > summary h3{color:var(--danger)}
+details.exercise.flagged.flaghit .flagbtn{color:var(--good)}
+details.exercise.flagged.flaghit > summary{background:rgba(62,107,74,.14);border-left-color:var(--good)}
+details.exercise.flagged.flaghit > summary h3{color:var(--good)}
 .exnote-wrap{margin:2px 2px 12px}
 .exnote-lbl{font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);margin:0 0 4px}
 .exnote{min-height:38px;border:1px dashed var(--hair);border-radius:9px;padding:8px 10px;font:inherit;font-size:.9rem;color:var(--ink);background:var(--bg)}
@@ -113,12 +120,20 @@ html.flatmode details.section > summary h2{color:var(--green)}
 .donebox.done::after{content:"";position:absolute;left:7px;top:3px;width:6px;height:11px;border-right:2.5px solid var(--bg);border-bottom:2.5px solid var(--bg);transform:rotate(40deg)}
 details.exercise.doneToday > summary h3{color:var(--ink2);text-decoration:line-through}
 details.exercise.overdue > summary h3{color:var(--danger)}
-.overdue-banner{display:flex;align-items:center;gap:11px;background:var(--accent-soft);color:var(--accent);
-  border:1px solid var(--accent);border-radius:12px;padding:11px 14px;margin-bottom:12px;font-size:.9rem;font-weight:600}
+.overdue-wrap{background:var(--accent-soft);border:1px solid var(--accent);border-radius:12px;margin-bottom:12px;overflow:hidden}
+.overdue-banner{display:flex;align-items:center;gap:11px;color:var(--accent);
+  padding:11px 14px;font-size:.9rem;font-weight:600}
 .overdue-banner .ob-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:var(--accent)}
 .overdue-banner .ob-text{flex:1;cursor:pointer}
 .overdue-banner .ob-x{flex:0 0 auto;border:0;background:none;color:var(--accent);font-size:1.25rem;line-height:1;cursor:pointer;padding:2px 4px;opacity:.65}
 .overdue-banner .ob-x:hover{opacity:1}
+.ob-list{border-top:1px solid var(--accent);padding:4px 6px 8px;background:var(--card)}
+.ob-item{display:flex;align-items:center;gap:8px;padding:7px 8px;border-bottom:1px solid var(--hair)}
+.ob-item:last-child{border-bottom:none}
+.ob-name{flex:1;cursor:pointer;color:var(--ink);font-weight:600;font-size:.9rem}
+.ob-name:hover{color:var(--accent);text-decoration:underline}
+.ob-skip{flex:0 0 auto;border:1px solid var(--hair);background:var(--bg);color:var(--ink2);font-size:.72rem;font-weight:700;border-radius:999px;padding:3px 10px;cursor:pointer}
+.ob-skip:hover{color:var(--accent);border-color:var(--accent)}
 .sess-row{margin:7px 0;font-size:.9rem}
 .sess-date{font-weight:700;color:var(--accent);margin-right:6px;font-variant-numeric:tabular-nums}
 .sess-day{border:1px solid var(--hair);border-radius:10px;padding:8px 10px;margin:6px 0;background:var(--inset)}
@@ -1263,43 +1278,72 @@ function refreshAllOpenTables(){
 }
 /* overdue banner shared builder + dismiss */
 var overdueDismissed=false;
+var skippedOverdue={};
 function makeOverdueBanner(){
-  var b=el("div","overdue-banner"); b.id="overdueBanner"; b.style.display="none";
+  var wrap=el("div","overdue-wrap"); wrap.id="overdueWrap"; wrap.style.display="none";
+  var b=el("div","overdue-banner");
   b.appendChild(el("span","ob-dot"));
   var t=el("span","ob-text"); t.addEventListener("click",function(){
-    var first=document.querySelector("details.exercise.overdue");
-    if(first){ first.open=true; var d=first.closest("details.day"); if(d)d.open=true; var s=first.closest("details.section"); if(s)s.open=true; first.scrollIntoView({behavior:"smooth",block:"center"}); }
+    var list=document.getElementById("obList"); if(!list) return;
+    var showing=list.style.display!=="none";
+    list.style.display=showing?"none":""; wrap.classList.toggle("open",!showing);
   });
   b.appendChild(t);
   var x=el("button","ob-x","×"); x.type="button"; x.title="Dismiss for now";
-  x.addEventListener("click",function(e){ e.stopPropagation(); overdueDismissed=true; b.style.display="none";
+  x.addEventListener("click",function(e){ e.stopPropagation(); overdueDismissed=true; wrap.style.display="none";
     document.querySelectorAll("details.exercise.overdue").forEach(function(n){ n.classList.remove("overdue"); }); });
   b.appendChild(x);
-  return b;
+  wrap.appendChild(b);
+  var list=el("div","ob-list"); list.id="obList"; list.style.display="none"; wrap.appendChild(list);
+  return wrap;
 }
-function showOverdueBanner(n){
-  var b=document.getElementById("overdueBanner"); if(!b) return;
-  if(overdueDismissed || n<=0){ b.style.display="none"; return; }
-  b.style.display="";
-  b.querySelector(".ob-text").textContent = n+" exercise"+(n>1?"s":"")+" not touched in 2+ weeks — tap to review";
+function jumpToExercise(id){
+  var node=flatNodes[id]||document.querySelector('details.exercise[data-exid="'+id+'"]');
+  if(!node) return;
+  node.open=true;
+  var d=node.closest("details.day"); if(d)d.open=true;
+  var s=node.closest("details.section"); if(s)s.open=true;
+  node.scrollIntoView({behavior:"smooth",block:"center"});
+}
+function refreshOverdue(){ if(PROG&&PROG.flat) updateOverdue(); else updateOverdueAll(); }
+function showOverdueBanner(n, items){
+  var wrap=document.getElementById("overdueWrap"); if(!wrap) return;
+  if(overdueDismissed || n<=0){ wrap.style.display="none"; return; }
+  wrap.style.display="";
+  wrap.querySelector(".ob-text").textContent = n+" exercise"+(n>1?"s":"")+" not hit in 2+ weeks — tap for the list";
+  var list=document.getElementById("obList"); if(!list) return;
+  var wasOpen=list.style.display!=="none";
+  list.textContent="";
+  (items||[]).forEach(function(it){
+    var row=el("div","ob-item");
+    var nm=el("span","ob-name",it.name); nm.title="Jump to it";
+    nm.addEventListener("click",function(){ jumpToExercise(it.id); });
+    row.appendChild(nm);
+    var sk=el("button","ob-skip","skip"); sk.type="button"; sk.title="Skip for now";
+    sk.addEventListener("click",function(e){ e.stopPropagation(); skippedOverdue[it.id]=true; refreshOverdue(); });
+    row.appendChild(sk);
+    list.appendChild(row);
+  });
+  list.style.display=wasOpen?"":"none";
 }
 /* "haven't hit this in a while" for regular (non-flat) clients */
 function updateOverdueAll(){
   if(PROG && PROG.flat) return;
   var cutoff=new Date(); cutoff.setDate(cutoff.getDate()-14);
   var cutIso=cutoff.getFullYear()+"-"+String(cutoff.getMonth()+1).padStart(2,"0")+"-"+String(cutoff.getDate()).padStart(2,"0");
-  var n=0;
+  var n=0, items=[];
   document.querySelectorAll("details.exercise[data-exid]").forEach(function(node){
     var id=node.dataset.exid, ex=exIndex[id]; if(!ex) return;
     var di=colsFor(ex).indexOf("Date"); if(di<0)di=0;
     var rows=store.rows[id]||(ex.seed||[]);
     var last=null;
     rows.forEach(function(r){ var iso=mdToIso(r[di]); if(iso&&(!last||iso>last))last=iso; });
-    var od=last && last<cutIso;
+    var od=last && last<cutIso && !skippedOverdue[id];
     node.classList.toggle("overdue",!!od);
-    if(od) n++;
+    if(od){ n++; items.push({id:id,name:(ex.name||"").replace(/^\d+\/\d+\s+/,"")}); }
   });
-  showOverdueBanner(n);
+  items.sort(function(a,b){ return a.name.toLowerCase()<b.name.toLowerCase()?-1:1; });
+  showOverdueBanner(n, items);
 }
 
 /* ---------- flat (personal) mode ---------- */
@@ -1323,7 +1367,7 @@ function renderFlatTables(ex,host){
 }
 function renderExerciseFlat(ex){
   var exd=el("details","exercise"); exd.dataset.exid=ex.id; flatNodes[ex.id]=exd;
-  if(META[ex.id]&&META[ex.id].revisit) exd.classList.add("revisit");
+  if(isFlagged(ex.id)){ exd.classList.add("flagged"); if(SESS.doneToday[ex.id]) exd.classList.add("flaghit"); }
   if(SESS.doneToday[ex.id]) exd.classList.add("doneToday");
   var esum=el("summary");
   var done=el("button","donebox"+(SESS.doneToday[ex.id]?" done":"")); done.type="button";
@@ -1332,6 +1376,7 @@ function renderExerciseFlat(ex){
     e.preventDefault(); e.stopPropagation();
     var now=toggleDone(ex.id,ex.name);
     done.classList.toggle("done",now); exd.classList.toggle("doneToday",now);
+    if(isFlagged(ex.id)) exd.classList.toggle("flaghit",now);
     renderSessions(); updateOverdue();
     toast(now?"Nice — logged":"Unmarked");
   });
@@ -1350,12 +1395,14 @@ function renderExerciseFlat(ex){
     pen.addEventListener("click",function(e){ e.preventDefault(); e.stopPropagation(); startRename(h3,ex); });
     esum.appendChild(pen);
   }
-  var flag=el("button","flagbtn","⚑"); flag.type="button"; flag.title="Mark to revisit";
+  var flag=el("button","flagbtn"+(isFlagged(ex.id)?" on":""),"⚑"); flag.type="button"; flag.title="Flag for this week (clears Monday)";
   flag.addEventListener("click",function(e){
     e.preventDefault(); e.stopPropagation();
-    META[ex.id]=META[ex.id]||{note:"",revisit:false};
-    META[ex.id].revisit=!META[ex.id].revisit;
-    exd.classList.toggle("revisit",META[ex.id].revisit); saveMeta(ex.id);
+    toggleFlag(ex.id);
+    var on=isFlagged(ex.id);
+    flag.classList.toggle("on",on);
+    exd.classList.toggle("flagged",on);
+    exd.classList.toggle("flaghit", on && !!SESS.doneToday[ex.id]);
   });
   esum.appendChild(flag);
   exd.appendChild(esum);
@@ -1386,6 +1433,7 @@ function syncFlatDoneState(){
     var node=flatNodes[id]; if(!node) return;
     var on=!!SESS.doneToday[id];
     node.classList.toggle("doneToday",on);
+    if(isFlagged(id)) node.classList.toggle("flaghit",on);
     var box=node.querySelector(".donebox"); if(box) box.classList.toggle("done",on);
   });
 }
@@ -1443,21 +1491,26 @@ function renderSessions(){
 function updateOverdue(){
   var cutoff=new Date(); cutoff.setDate(cutoff.getDate()-14);
   var cutIso=cutoff.getFullYear()+"-"+String(cutoff.getMonth()+1).padStart(2,"0")+"-"+String(cutoff.getDate()).padStart(2,"0");
-  var n=0;
+  var n=0, items=[];
   allFlatExercises().forEach(function(ex){
     var last=lastActivityIso(ex);
-    var od = last && last<cutIso;
+    var od = last && last<cutIso && !skippedOverdue[ex.id];
     var node=flatNodes[ex.id]; if(node) node.classList.toggle("overdue",!!od);
-    if(od) n++;
+    if(od){ n++; items.push({id:ex.id,name:flatDisplayName(ex.name,ex.id)}); }
   });
-  showOverdueBanner(n);
+  items.sort(function(a,b){ return a.name.toLowerCase()<b.name.toLowerCase()?-1:1; });
+  showOverdueBanner(n, items);
 }
 function flatSortKey(name){ return (name||"").replace(/^\d+\/\d+\s+/,"").toLowerCase().trim(); }
 function flatDisplayName(name,id){ var n=(id&&FLAT.renames&&FLAT.renames[id])||name||""; return n.replace(/^\d+\/\d+\s+/,""); }
 /* ---- flat overlay: her own edits (non-negotiable tags, working-on list, renames) ---- */
-var FLAT={nonneg:[],workingOn:[],renames:{},mode:"structured"};
+var FLAT={nonneg:[],workingOn:[],renames:{},mode:"structured",flagged:[],flagWeek:null};
 var CAN_EDIT_FLAT=false;
 var NATIVE_FLAT=false;   /* rojan's own page is flat by design; grocery clients toggle in */
+/* weekly focus flags: red when flagged, green once hit, cleared every Monday */
+function ensureFlagWeek(){ var w=weekStartIso(); if(FLAT.flagWeek!==w){ FLAT.flagWeek=w; FLAT.flagged=[]; saveFlatSoon(); } }
+function isFlagged(id){ return FLAT.flagged && FLAT.flagged.indexOf(id)>=0; }
+function toggleFlag(id){ ensureFlagWeek(); FLAT.flagged=FLAT.flagged||[]; var i=FLAT.flagged.indexOf(id); if(i>=0)FLAT.flagged.splice(i,1); else FLAT.flagged.push(id); saveFlatSoon(); }
 var flatTimer=null;
 function isNonneg(id){ return FLAT.nonneg && FLAT.nonneg.indexOf(id)>=0; }
 function toggleNonneg(id){ FLAT.nonneg=FLAT.nonneg||[]; var i=FLAT.nonneg.indexOf(id); if(i>=0)FLAT.nonneg.splice(i,1); else FLAT.nonneg.push(id); saveFlatSoon(); }
@@ -1466,7 +1519,7 @@ async function fetchFlatOverlay(){
   try{
     var r=await fetch(sbUrl("/rest/v1/client_flat?client_slug=eq."+encodeURIComponent(SLUG)+"&select=data"),{headers:sbHeaders()});
     if(!r.ok) return; var a=await r.json();
-    if(a.length){ var d={}; try{ d=JSON.parse(a[0].data||"{}"); }catch(e){} FLAT.nonneg=d.nonneg||[]; FLAT.workingOn=d.workingOn||[]; FLAT.renames=d.renames||{}; FLAT.mode=d.mode||"structured"; }
+    if(a.length){ var d={}; try{ d=JSON.parse(a[0].data||"{}"); }catch(e){} FLAT.nonneg=d.nonneg||[]; FLAT.workingOn=d.workingOn||[]; FLAT.renames=d.renames||{}; FLAT.mode=d.mode||"structured"; FLAT.flagged=d.flagged||[]; FLAT.flagWeek=d.flagWeek||null; }
   }catch(e){}
 }
 function saveFlatSoon(){ clearTimeout(flatTimer); flatTimer=setTimeout(saveFlat,700); }
@@ -1474,7 +1527,7 @@ function saveFlat(){
   if(!cloudEnabled()) return;
   fetch(sbUrl("/rest/v1/client_flat?on_conflict=client_slug"),{
     method:"POST",headers:sbHeaders({"Prefer":"resolution=merge-duplicates,return=minimal"}),
-    body:JSON.stringify([{client_slug:SLUG,data:JSON.stringify({nonneg:FLAT.nonneg,workingOn:FLAT.workingOn,renames:FLAT.renames,mode:FLAT.mode}),updated_at:new Date().toISOString()}])
+    body:JSON.stringify([{client_slug:SLUG,data:JSON.stringify({nonneg:FLAT.nonneg,workingOn:FLAT.workingOn,renames:FLAT.renames,mode:FLAT.mode,flagged:FLAT.flagged,flagWeek:FLAT.flagWeek}),updated_at:new Date().toISOString()}])
   }).catch(function(){});
 }
 function renderWorkingOn(host){
@@ -1551,6 +1604,7 @@ function modeToggle(){
 }
 function buildFlat(content){
   document.documentElement.classList.add("flatmode");
+  ensureFlagWeek();
   flatNodes={};
   var list=allFlatExercises();
   list.forEach(function(ex){ exIndex[ex.id]=ex; if(ex.variants) ex.variants.forEach(function(v){ exIndex[v.id]=v; }); });
