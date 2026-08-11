@@ -176,6 +176,7 @@ tr.chipbar td{background:var(--bg2);padding:6px 10px}
 .gal-cell img{width:100%;height:120px;object-fit:cover;display:block}
 .gal-cap{display:flex;justify-content:space-between;align-items:center;padding:4px 8px;font-size:.72rem;color:var(--ink2)}
 .prof-upload{margin-top:4px}
+.logframe{width:100%;height:calc(100vh - 210px);min-height:520px;border:1px solid var(--hair);border-radius:12px;background:var(--card);display:block}
 .bodycard{border:1px solid var(--hair);border-radius:14px;padding:14px;background:var(--card);margin:6px 0 14px}
 .bc-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap}
 .bc-t{font-family:"Fraunces",serif;font-weight:500;font-size:1.05rem;color:var(--ink)}
@@ -431,7 +432,7 @@ function showTab(name){
   ["program","logs","messages","nutrition","profile","private","access"].forEach(function(n){
     $("tab-"+n).style.display=(n===name)?"":"none";
   });
-  if(name==="logs")loadLogs();
+  if(name==="logs")loadLogsFrame();
   if(name==="messages")loadMessages();
   if(name==="nutrition")loadNutrition();
   if(name==="profile")loadProfile();
@@ -847,6 +848,16 @@ function exById(){
     });
   });
   return map;
+}
+function loadLogsFrame(){
+  var host=$("tab-logs"); host.textContent="";
+  var tok=tokenFor(currentSlug);
+  if(!tok){ host.appendChild(el("p","note","This client's link is revoked. Restore it in the Access tab to log from here.")); return; }
+  host.appendChild(el("p","note","You're in the client's own view — same logging, collapsible days, same dates they see. Edits save straight to their log."));
+  var frame=document.createElement("iframe");
+  frame.className="logframe"; frame.title="Client logging view";
+  frame.src=siteBase()+"client.html?c="+encodeURIComponent(currentSlug)+"&k="+encodeURIComponent(tok)+"&coach=1";
+  host.appendChild(frame);
 }
 async function loadLogs(){
   var host=$("tab-logs"); host.textContent="Loading…";
