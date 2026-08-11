@@ -166,6 +166,9 @@ tr.chipbar td{background:var(--bg2);padding:6px 10px}
 .mu-rep{background:var(--accent-soft);color:var(--accent)}
 .mu-add{background:var(--demo-soft);color:var(--demo)}
 .mu-txt{flex:1;font-size:.86rem;color:var(--ink2)}
+.gro-wo{display:flex;gap:8px;align-items:center;margin:6px 0}
+.gro-ex{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--hair-soft);font-size:.9rem;cursor:pointer}
+.gro-ex input{width:18px;height:18px;flex:0 0 auto}
 .msgcard{border:1px solid var(--hair);border-left:3px solid var(--accent);border-radius:10px;padding:10px 12px;margin:8px 0;background:var(--card)}
 .msgcard.resolved{border-left-color:var(--hair);opacity:.6}
 .msgmeta{font-size:.72rem;color:var(--ink2);margin-bottom:4px}
@@ -284,6 +287,7 @@ tr.chipbar td{background:var(--bg2);padding:6px 10px}
       <button class="tab" data-tab="nutrition" type="button">Nutrition</button>
       <button class="tab" data-tab="profile" type="button">Profile</button>
       <button class="tab" data-tab="makeups" type="button">Make-ups<span id="muTabBadge" class="badge" style="display:none"></span></button>
+      <button class="tab" data-tab="grocery" type="button">Grocery</button>
       <button class="tab" data-tab="private" type="button">Private</button>
       <button class="tab" data-tab="access" type="button">Access</button>
     </div>
@@ -293,6 +297,7 @@ tr.chipbar td{background:var(--bg2);padding:6px 10px}
     <div id="tab-nutrition" style="display:none"></div>
     <div id="tab-profile" style="display:none"></div>
     <div id="tab-makeups" style="display:none"></div>
+    <div id="tab-grocery" style="display:none"></div>
     <div id="tab-private" style="display:none"></div>
     <div id="tab-access" style="display:none"></div>
   </div>
@@ -460,7 +465,7 @@ document.querySelectorAll(".tab").forEach(function(t){
 });
 function showTab(name){
   document.querySelectorAll(".tab").forEach(function(t){ t.classList.toggle("on",t.dataset.tab===name); });
-  ["program","logs","messages","nutrition","profile","makeups","private","access"].forEach(function(n){
+  ["program","logs","messages","nutrition","profile","makeups","grocery","private","access"].forEach(function(n){
     $("tab-"+n).style.display=(n===name)?"":"none";
   });
   if(name==="logs")loadLogs();
@@ -468,6 +473,7 @@ function showTab(name){
   if(name==="nutrition")loadNutrition();
   if(name==="profile")loadProfile();
   if(name==="makeups")loadMakeups();
+  if(name==="grocery")loadGrocery();
   if(name==="private")loadPrivate();
   if(name==="access")renderAccess();
 }
@@ -1245,6 +1251,62 @@ function updateMakeupTabBadge(){
   var b=$("muTabBadge"); if(!b) return;
   var n=currentSlug?(makeupCounts[currentSlug]||0):0;
   if(n>0){ b.textContent=n; b.style.display=""; } else b.style.display="none";
+}
+/* ---------- grocery-list setup (coach sets a client's flat non-negotiables + working-on) ---------- */
+var GRO={data:{}};
+var groTimer=null;
+async function fetchClientFlat(slug){
+  try{
+    var r=await fetch(url("/rest/v1/client_flat?client_slug=eq."+esc(slug)+"&select=data"),{headers:headers()});
+    if(!r.ok) return {}; var a=await r.json(); if(!a.length) return {};
+    try{ return JSON.parse(a[0].data||"{}"); }catch(e){ return {}; }
+  }catch(e){ return {}; }
+}
+async function loadGrocery(){
+  var host=$("tab-grocery"); host.textContent="Loading…";
+  GRO.data=await fetchClientFlat(currentSlug);
+  renderGrocery();
+}
+function saveGrocerySoon(){ clearTimeout(groTimer); groTimer=setTimeout(saveGrocery,600); }
+async function saveGrocery(){
+  try{
+    var r=await fetch(url("/rest/v1/client_flat?on_conflict=client_slug"),{method:"POST",
+      headers:headers({"Prefer":"resolution=merge-duplicates,return=minimal"}),
+      body:JSON.stringify([{client_slug:currentSlug,data:JSON.stringify(GRO.data),updated_at:new Date().toISOString()}])});
+    if(!r.ok)throw 0; toast("Saved");
+  }catch(e){ toast("Save failed"); }
+}
+function renderGroWorkingOn(host){
+  host.textContent="";
+  (GRO.data.workingOn||[]).forEach(function(item,i){
+    var row=el("div","gro-wo");
+    var inp=document.createElement("input"); inp.type="text"; inp.value=item; inp.className="mu-note";
+    inp.addEventListener("change",function(){ var v=inp.value.trim(); if(!v){ GRO.data.workingOn.splice(i,1); saveGrocery(); renderGroWorkingOn(host); } else { GRO.data.workingOn[i]=v; saveGrocerySoon(); } });
+    row.appendChild(inp);
+    var rm=el("button","btn small","✕"); rm.type="button"; rm.addEventListener("click",function(){ GRO.data.workingOn.splice(i,1); saveGrocerySoon(); renderGroWorkingOn(host); });
+    row.appendChild(rm); host.appendChild(row);
+  });
+  var add=el("button","btn small","+ Add a focus"); add.type="button";
+  add.addEventListener("click",function(){ GRO.data.workingOn=GRO.data.workingOn||[]; GRO.data.workingOn.push(""); renderGroWorkingOn(host); var last=host.querySelector(".gro-wo:last-child input"); if(last)last.focus(); });
+  host.appendChild(add);
+}
+function renderGrocery(){
+  var host=$("tab-grocery"); host.textContent="";
+  host.appendChild(el("p","note","This is what the client sees if they flip their program to the grocery-list view. They can tick things done, but only you set the non-negotiables and focus list here."));
+  GRO.data.nonneg=GRO.data.nonneg||[]; GRO.data.workingOn=GRO.data.workingOn||[];
+  host.appendChild(el("h3","prof-h","Currently working on"));
+  var woHost=el("div"); host.appendChild(woHost); renderGroWorkingOn(woHost);
+  host.appendChild(el("h3","prof-h","Non-negotiables"));
+  host.appendChild(el("p","note","Tick the exercises that are non-negotiable for them."));
+  var seen={};
+  (prog.cycles||[]).forEach(function(cy){(cy.days||[]).forEach(function(day){(day.exercises||[]).forEach(function(ex){
+    if(seen[ex.id]||!ex.name)return; seen[ex.id]=1;
+    var row=el("label","gro-ex");
+    var cb=document.createElement("input"); cb.type="checkbox"; cb.checked=GRO.data.nonneg.indexOf(ex.id)>=0;
+    cb.addEventListener("change",function(){ var i=GRO.data.nonneg.indexOf(ex.id); if(cb.checked){ if(i<0)GRO.data.nonneg.push(ex.id); } else if(i>=0)GRO.data.nonneg.splice(i,1); saveGrocerySoon(); });
+    row.appendChild(cb); row.appendChild(el("span",null,(ex.name||"").replace(/^\d+\/\d+\s+/,"")));
+    host.appendChild(row);
+  }); }); });
 }
 var privTimer=null;
 async function loadPrivate(){
