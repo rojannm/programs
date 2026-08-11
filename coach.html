@@ -116,6 +116,12 @@ textarea{min-height:120px;resize:vertical}
 .logday .exblock{margin:12px}
 .logday.nomatch{display:none}
 .exblock{margin:14px 0}
+.exblock.nomatch{display:none}
+.exblock>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;padding:6px 0}
+.exblock>summary::-webkit-details-marker{display:none}
+.exblock>summary::before{content:"\25B8";color:var(--ink2);transition:transform .15s ease;display:inline-block;font-size:.8rem;flex:0 0 auto}
+.exblock[open]>summary::before{transform:rotate(90deg)}
+.exblock>summary h3{margin:0}
 .exblock h3{font-size:.95rem;font-weight:700;margin:0 0 6px}
 .exblock .meta{color:var(--ink2);font-weight:500;font-size:.8rem;margin-left:6px}
 .tblwrap{overflow-x:auto;border:1px solid var(--hair);border-radius:10px}
@@ -922,9 +928,9 @@ function renderLogsBody(){
   });
   bar.appendChild(clr);
   var exp=el("button","btn small","Expand all"); exp.type="button";
-  exp.addEventListener("click",function(){ host.querySelectorAll(".logday").forEach(function(d){ d.open=true; }); });
+  exp.addEventListener("click",function(){ host.querySelectorAll(".logday,.exblock").forEach(function(d){ d.open=true; }); });
   var col=el("button","btn small","Collapse all"); col.type="button";
-  col.addEventListener("click",function(){ host.querySelectorAll(".logday").forEach(function(d){ d.open=false; }); });
+  col.addEventListener("click",function(){ host.querySelectorAll(".logday,.exblock").forEach(function(d){ d.open=false; }); });
   bar.appendChild(exp); bar.appendChild(col);
   host.appendChild(bar);
   var search=document.createElement("input"); search.type="search"; search.id="logSearch";
@@ -936,6 +942,7 @@ function renderLogsBody(){
       det.querySelectorAll(".exblock").forEach(function(b){
         var h=b.querySelector("h3"); var m=!q||(h&&h.textContent.toLowerCase().indexOf(q)>=0);
         b.classList.toggle("nomatch",!m); if(m)anyVis=true;
+        if(q&&m) b.open=true;
       });
       det.classList.toggle("nomatch",!!q&&!anyVis);
       if(q&&anyVis) det.open=true;
@@ -974,11 +981,13 @@ function renderLogsBody(){
   updateLogHistBtns();
 }
 function renderLogBlock(ex,rows){
-  var block=el("div","exblock");
+  var block=el("details","exblock");
   if(coachMeta[ex.id]&&coachMeta[ex.id].revisit) block.classList.add("revisit");
+  var sum=el("summary");
   var h=el("h3",null,ex.name);
   var flag=el("button","flagbtn","⚑"); flag.type="button"; flag.title="Mark to revisit (didn't get to it)";
-  flag.addEventListener("click",function(){
+  flag.addEventListener("click",function(e){
+    e.preventDefault(); e.stopPropagation();
     var now=!(coachMeta[ex.id]&&coachMeta[ex.id].revisit);
     setRevisit(ex.id,now);
     block.classList.toggle("revisit",now);
@@ -990,7 +999,8 @@ function renderLogBlock(ex,rows){
     var d=new Date(latest);
     h.appendChild(el("span","meta","updated "+(d.getMonth()+1)+"/"+d.getDate()));
   }
-  block.appendChild(h);
+  if(rows.length) h.appendChild(el("span","meta",rows.length+(rows.length===1?" set":" sets")));
+  sum.appendChild(h); block.appendChild(sum);
   var cols=ex.cols||["Date","Weight","Set","Reps"];
   var wrap=el("div","tblwrap"), t=el("table");
   var thead=el("thead"), htr=el("tr");
