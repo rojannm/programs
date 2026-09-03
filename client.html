@@ -153,10 +153,13 @@ details.exercise.overdue > summary h3{color:var(--danger)}
 .mt-btn.on{background:var(--green);color:var(--bg)}
 :root[data-theme="night"] .mt-btn.on,:root[data-theme="dark"] .mt-btn.on{color:var(--inset)}
 /* non-negotiable tag + inline edit controls */
-.nnbtn,.penbtn{border:none;background:transparent;cursor:pointer;flex:0 0 auto;line-height:1;padding:2px 4px;color:var(--ink2);font-size:1rem}
+.nnbtn,.penbtn,.swapbtn{border:none;background:transparent;cursor:pointer;flex:0 0 auto;line-height:1;padding:2px 4px;color:var(--ink2);font-size:1rem}
 .nnbtn.on{color:var(--accent)}
 .penbtn{font-size:.9rem}
-.nnbtn:hover,.penbtn:hover{color:var(--accent)}
+.swapbtn{font-size:1rem}
+.nnbtn:hover,.penbtn:hover,.swapbtn:hover{color:var(--accent)}
+.daytag-flat{flex:0 0 auto;font-size:.6rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink2);background:var(--bg2);border:1px solid var(--hair);border-radius:999px;padding:2px 7px}
+.swaptag{flex:0 0 auto;font-size:.58rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--demo);background:var(--demo-soft);border-radius:999px;padding:2px 7px;cursor:pointer}
 details.exercise.isnonneg > summary h3{color:var(--accent)}
 details.exercise.isnonneg > summary h3::after{content:"non-negotiable";font-family:"Hanken Grotesk",sans-serif;font-size:.54rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);background:var(--accent-soft);border-radius:4px;padding:2px 5px;margin-left:8px;vertical-align:middle;white-space:nowrap}
 /* currently working on */
@@ -858,6 +861,7 @@ function renderTable(ex,container){
     markDirty(ex.id); persist(false);
     renderTable(ex,container);
     try{ updateOverdueAll(); }catch(e){}
+    if(document.documentElement.classList.contains("flatmode")){ try{ syncFlatDoneState(); renderSessions(); updateOverdue(); }catch(e){} }
     var lastRow=container.querySelector('tbody tr[data-ri]:last-of-type td');
     if(lastRow)lastRow.focus();
   });
@@ -892,6 +896,7 @@ function renderTable(ex,container){
     store.rows[ex.id]=store.rows[ex.id].concat(copies);
     markDirty(ex.id); persist(true);
     renderTable(ex,container);
+    if(document.documentElement.classList.contains("flatmode")){ try{ syncFlatDoneState(); renderSessions(); updateOverdue(); }catch(e){} }
     toast(hasToday?"Next set added":"Last session copied for today");
   });
   actions.appendChild(same);
@@ -1367,18 +1372,20 @@ function renderFlatTables(ex,host){
 }
 function renderExerciseFlat(ex){
   var exd=el("details","exercise"); exd.dataset.exid=ex.id; flatNodes[ex.id]=exd;
-  if(isFlagged(ex.id)){ exd.classList.add("flagged"); if(SESS.doneToday[ex.id]) exd.classList.add("flaghit"); }
-  if(SESS.doneToday[ex.id]) exd.classList.add("doneToday");
+  var doneWk=isDoneWeek(ex.id);
+  if(isFlagged(ex.id)){ exd.classList.add("flagged"); if(doneWk) exd.classList.add("flaghit"); }
+  if(doneWk) exd.classList.add("doneToday");
   var esum=el("summary");
-  var done=el("button","donebox"+(SESS.doneToday[ex.id]?" done":"")); done.type="button";
+  var done=el("button","donebox"+(doneWk?" done":"")); done.type="button";
   done.title="Mark done this week"; done.setAttribute("aria-label","Mark "+ex.name+" done this week");
   done.addEventListener("click",function(e){
     e.preventDefault(); e.stopPropagation();
-    var now=toggleDone(ex.id,ex.name);
-    done.classList.toggle("done",now); exd.classList.toggle("doneToday",now);
-    if(isFlagged(ex.id)) exd.classList.toggle("flaghit",now);
+    toggleDone(ex.id,ex.name);
+    var vis=isDoneWeek(ex.id);
+    done.classList.toggle("done",vis); exd.classList.toggle("doneToday",vis);
+    if(isFlagged(ex.id)) exd.classList.toggle("flaghit",vis);
     renderSessions(); updateOverdue();
-    toast(now?"Nice — logged":"Unmarked");
+    toast(vis?"Nice — logged":"Unmarked");
   });
   esum.appendChild(done);
   esum.appendChild(el("span","chev"));
@@ -1386,11 +1393,20 @@ function renderExerciseFlat(ex){
   var h3=el("h3",null,flatDisplayName(ex.name,ex.id));
   h3.addEventListener("click",function(e){ if(h3.isContentEditable) e.stopPropagation(); });
   esum.appendChild(h3);
+  if(SHOW_DAYTAG && DAYOF[ex.id]) esum.appendChild(el("span","daytag-flat",DAYOF[ex.id]));
+  if(isSwapped(ex.id)){
+    var sb=el("span","swaptag","swapped"); sb.title="Was: "+((FLAT.swaps[ex.id].from)||"")+(CAN_EDIT_FLAT?" · tap to undo":"");
+    if(CAN_EDIT_FLAT) sb.addEventListener("click",function(e){ e.preventDefault(); e.stopPropagation(); setSwap(ex.id,null); h3.textContent=flatDisplayName(ex.name,ex.id); sb.remove(); });
+    esum.appendChild(sb);
+  }
   if(ex.demo)esum.appendChild(el("span","demotag","demo"));
   if(CAN_EDIT_FLAT){
     var star=el("button","nnbtn"+(isNonneg(ex.id)?" on":""), isNonneg(ex.id)?"★":"☆"); star.type="button"; star.title="Non-negotiable";
     star.addEventListener("click",function(e){ e.preventDefault(); e.stopPropagation(); toggleNonneg(ex.id); var on=isNonneg(ex.id); star.classList.toggle("on",on); star.textContent=on?"★":"☆"; exd.classList.toggle("isnonneg",on); });
     esum.appendChild(star);
+    var swp=el("button","swapbtn","⇄"); swp.type="button"; swp.title="Swap for a different version";
+    swp.addEventListener("click",function(e){ e.preventDefault(); e.stopPropagation(); startSwap(h3,ex); });
+    esum.appendChild(swp);
     var pen=el("button","penbtn","✎"); pen.type="button"; pen.title="Rename this exercise";
     pen.addEventListener("click",function(e){ e.preventDefault(); e.stopPropagation(); startRename(h3,ex); });
     esum.appendChild(pen);
@@ -1431,7 +1447,7 @@ function recomputeDoneWeek(){
 function syncFlatDoneState(){
   Object.keys(flatNodes).forEach(function(id){
     var node=flatNodes[id]; if(!node) return;
-    var on=!!SESS.doneToday[id];
+    var on=isDoneWeek(id);   /* done if ticked OR logged this week */
     node.classList.toggle("doneToday",on);
     if(isFlagged(id)) node.classList.toggle("flaghit",on);
     var box=node.querySelector(".donebox"); if(box) box.classList.toggle("done",on);
@@ -1502,9 +1518,20 @@ function updateOverdue(){
   showOverdueBanner(n, items);
 }
 function flatSortKey(name){ return (name||"").replace(/^\d+\/\d+\s+/,"").toLowerCase().trim(); }
-function flatDisplayName(name,id){ var n=(id&&FLAT.renames&&FLAT.renames[id])||name||""; return n.replace(/^\d+\/\d+\s+/,""); }
-/* ---- flat overlay: her own edits (non-negotiable tags, working-on list, renames) ---- */
-var FLAT={nonneg:[],workingOn:[],renames:{},mode:"structured",flagged:[],flagWeek:null};
+function flatDisplayName(name,id){ var sw=id&&FLAT.swaps&&FLAT.swaps[id]; var n=(sw&&sw.to)||(id&&FLAT.renames&&FLAT.renames[id])||name||""; return n.replace(/^\d+\/\d+\s+/,""); }
+/* ---- flat overlay: her own edits (non-negotiable tags, working-on list, renames, swaps) ---- */
+var FLAT={nonneg:[],workingOn:[],renames:{},mode:"structured",flagged:[],flagWeek:null,swaps:{}};
+function isSwapped(id){ return FLAT.swaps && FLAT.swaps[id]; }
+function setSwap(id,to,from){ FLAT.swaps=FLAT.swaps||{}; if(!to){ delete FLAT.swaps[id]; } else { FLAT.swaps[id]={to:to,from:from}; } saveFlatSoon(); }
+var DAYOF={};   /* exId -> day label, for the grocery day tag */
+var SHOW_DAYTAG=false;
+function hasLogThisWeek(id){
+  var ws=weekStartIso(), ex=exIndex[id]; if(!ex) return false;
+  var di=colsFor(ex).indexOf("Date"); if(di<0)di=0;
+  var rows=store.rows[id]||(ex.seed||[]);
+  return rows.some(function(r){ var iso=mdToIso(r[di]); return iso && iso>=ws; });
+}
+function isDoneWeek(id){ return !!SESS.doneToday[id] || hasLogThisWeek(id); }
 var CAN_EDIT_FLAT=false;
 var NATIVE_FLAT=false;   /* rojan's own page is flat by design; grocery clients toggle in */
 /* weekly focus flags: red when flagged, green once hit, cleared every Monday */
@@ -1519,7 +1546,7 @@ async function fetchFlatOverlay(){
   try{
     var r=await fetch(sbUrl("/rest/v1/client_flat?client_slug=eq."+encodeURIComponent(SLUG)+"&select=data"),{headers:sbHeaders()});
     if(!r.ok) return; var a=await r.json();
-    if(a.length){ var d={}; try{ d=JSON.parse(a[0].data||"{}"); }catch(e){} FLAT.nonneg=d.nonneg||[]; FLAT.workingOn=d.workingOn||[]; FLAT.renames=d.renames||{}; FLAT.mode=d.mode||"structured"; FLAT.flagged=d.flagged||[]; FLAT.flagWeek=d.flagWeek||null; }
+    if(a.length){ var d={}; try{ d=JSON.parse(a[0].data||"{}"); }catch(e){} FLAT.nonneg=d.nonneg||[]; FLAT.workingOn=d.workingOn||[]; FLAT.renames=d.renames||{}; FLAT.mode=d.mode||"structured"; FLAT.flagged=d.flagged||[]; FLAT.flagWeek=d.flagWeek||null; FLAT.swaps=d.swaps||{}; }
   }catch(e){}
 }
 function saveFlatSoon(){ clearTimeout(flatTimer); flatTimer=setTimeout(saveFlat,700); }
@@ -1527,7 +1554,7 @@ function saveFlat(){
   if(!cloudEnabled()) return;
   fetch(sbUrl("/rest/v1/client_flat?on_conflict=client_slug"),{
     method:"POST",headers:sbHeaders({"Prefer":"resolution=merge-duplicates,return=minimal"}),
-    body:JSON.stringify([{client_slug:SLUG,data:JSON.stringify({nonneg:FLAT.nonneg,workingOn:FLAT.workingOn,renames:FLAT.renames,mode:FLAT.mode,flagged:FLAT.flagged,flagWeek:FLAT.flagWeek}),updated_at:new Date().toISOString()}])
+    body:JSON.stringify([{client_slug:SLUG,data:JSON.stringify({nonneg:FLAT.nonneg,workingOn:FLAT.workingOn,renames:FLAT.renames,mode:FLAT.mode,flagged:FLAT.flagged,flagWeek:FLAT.flagWeek,swaps:FLAT.swaps}),updated_at:new Date().toISOString()}])
   }).catch(function(){});
 }
 function renderWorkingOn(host){
@@ -1574,6 +1601,25 @@ function startRename(h3,ex){
   h3.addEventListener("blur",finish);
   h3.addEventListener("keydown",function(k){ if(k.key==="Enter"){ k.preventDefault(); h3.blur(); } });
 }
+function startSwap(h3,ex){
+  var base=(ex.name||"").replace(/^\d+\/\d+\s+/,""), cur=flatDisplayName(ex.name,ex.id);
+  h3.contentEditable="true"; h3.focus();
+  var sel=window.getSelection&&window.getSelection(); if(sel&&sel.selectAllChildren){ try{ sel.selectAllChildren(h3); }catch(e){} }
+  function finish(){
+    h3.contentEditable="false"; h3.removeEventListener("blur",finish);
+    var v=h3.textContent.trim();
+    if(!v || v===cur){ h3.textContent=flatDisplayName(ex.name,ex.id); return; }
+    setSwap(ex.id, v, base); h3.textContent=v;
+    var esum=h3.parentNode;
+    if(esum && !esum.querySelector(".swaptag")){
+      var sb=el("span","swaptag","swapped"); sb.title="Was: "+base+" · tap to undo";
+      sb.addEventListener("click",function(e){ e.preventDefault(); e.stopPropagation(); setSwap(ex.id,null); h3.textContent=flatDisplayName(ex.name,ex.id); sb.remove(); });
+      h3.insertAdjacentElement("afterend", sb);
+    }
+  }
+  h3.addEventListener("blur",finish);
+  h3.addEventListener("keydown",function(k){ if(k.key==="Enter"){ k.preventDefault(); h3.blur(); } });
+}
 /* ---- grocery-list mode: a structured client can flip to the flat pick-and-choose view ---- */
 function applyGroceryMode(){
   if(NATIVE_FLAT) return;                 /* rojan's own page is always flat */
@@ -1587,7 +1633,7 @@ async function switchMode(mode){
   if(!PROG.flat) document.documentElement.classList.remove("flatmode");
   if(PROG.flat){ try{ await pullSessions(); }catch(e){} }
   build();
-  try{ await pullLogs(); refreshAllOpenTables(); if(PROG.flat){ updateOverdue(); } else { updateOverdueAll(); } }catch(e){}
+  try{ await pullLogs(); refreshAllOpenTables(); if(PROG.flat){ syncFlatDoneState(); renderSessions(); updateOverdue(); } else { updateOverdueAll(); } }catch(e){}
   toast(mode==="grocery"?"Grocery-list view":"Structured view");
 }
 function modeToggle(){
@@ -1608,6 +1654,9 @@ function buildFlat(content){
   flatNodes={};
   var list=allFlatExercises();
   list.forEach(function(ex){ exIndex[ex.id]=ex; if(ex.variants) ex.variants.forEach(function(v){ exIndex[v.id]=v; }); });
+  DAYOF={}; var dayset={};
+  (PROG.cycles||[]).forEach(function(cy){ (cy.days||[]).forEach(function(day){ var lbl=day.title||day.id||""; (day.exercises||[]).forEach(function(ex){ if(!DAYOF[ex.id]){ DAYOF[ex.id]=lbl; dayset[lbl]=1; } }); }); });
+  SHOW_DAYTAG = Object.keys(dayset).length>1;   /* only tag when there are multiple days to tell apart */
   list.sort(function(a,b){ var ka=flatSortKey(a.name), kb=flatSortKey(b.name); return ka<kb?-1:ka>kb?1:0; });
 
   CAN_EDIT_FLAT = !PROG.readonlyFlat;   /* her own page is editable; grocery-list clients (Stage 5) are read-only */
@@ -1786,7 +1835,7 @@ async function boot(){
   try{
     await pullLogs();
     refreshAllOpenTables();
-    if(PROG.flat){ try{ updateOverdue(); }catch(e){} } else { try{ updateOverdueAll(); }catch(e){} }
+    if(PROG.flat){ try{ syncFlatDoneState(); renderSessions(); updateOverdue(); }catch(e){} } else { try{ updateOverdueAll(); }catch(e){} }
     var fn=document.getElementById("freenote");
     if(fn&&store.notes&&fn.textContent!==store.notes)fn.textContent=store.notes;
     setPill("synced");
