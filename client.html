@@ -991,13 +991,22 @@ function build(){
         var exd=el("details","exercise"); exd.dataset.exid=ex.id;
         if(META[ex.id]&&META[ex.id].revisit) exd.classList.add("revisit");
         var esum=el("summary"); esum.appendChild(el("span","chev"));
-        var h3=el("h3",null,ex.name);
+        var h3=el("h3",null,flatDisplayName(ex.name,ex.id));
+        h3.addEventListener("click",function(e){ if(h3.isContentEditable) e.stopPropagation(); });
         if(ex.struck)h3.classList.add("struck");
         esum.appendChild(h3);
+        if(isSwapped(ex.id)){
+          var sbg=el("span","swaptag","swapped"); sbg.title="Was: "+((FLAT.swaps[ex.id].from)||"")+" · tap to undo";
+          sbg.addEventListener("click",function(e){ e.preventDefault(); e.stopPropagation(); setSwap(ex.id,null); h3.textContent=flatDisplayName(ex.name,ex.id); sbg.remove(); });
+          esum.appendChild(sbg);
+        }
         var ss=supersetTag(ex.name||"");
         if(ss)esum.appendChild(el("span","sstag",ss));
         if(ex.demo)esum.appendChild(el("span","demotag","demo with Rojan"));
         if(ex.hl)esum.appendChild(el("span","coachtag","from Rojan"));
+        var swp=el("button","swapbtn","⇄"); swp.type="button"; swp.title="Swap for a different version";
+        swp.addEventListener("click",function(e){ e.preventDefault(); e.stopPropagation(); startSwap(h3,ex); });
+        esum.appendChild(swp);
         var flag=el("button","flagbtn","⚑"); flag.type="button";
         flag.title="Mark to revisit (start here next time)";
         flag.setAttribute("aria-label","Mark to revisit");
@@ -1508,11 +1517,12 @@ function updateOverdue(){
   var cutoff=new Date(); cutoff.setDate(cutoff.getDate()-14);
   var cutIso=cutoff.getFullYear()+"-"+String(cutoff.getMonth()+1).padStart(2,"0")+"-"+String(cutoff.getDate()).padStart(2,"0");
   var n=0, items=[];
-  allFlatExercises().forEach(function(ex){
+  Object.keys(flatNodes).forEach(function(id){
+    var ex=exIndex[id]; if(!ex) return;
     var last=lastActivityIso(ex);
-    var od = last && last<cutIso && !skippedOverdue[ex.id];
-    var node=flatNodes[ex.id]; if(node) node.classList.toggle("overdue",!!od);
-    if(od){ n++; items.push({id:ex.id,name:flatDisplayName(ex.name,ex.id)}); }
+    var od = last && last<cutIso && !skippedOverdue[id];
+    var node=flatNodes[id]; if(node) node.classList.toggle("overdue",!!od);
+    if(od){ n++; items.push({id:id,name:flatDisplayName(ex.name,id)}); }
   });
   items.sort(function(a,b){ return a.name.toLowerCase()<b.name.toLowerCase()?-1:1; });
   showOverdueBanner(n, items);
@@ -1654,6 +1664,18 @@ function buildFlat(content){
   flatNodes={};
   var list=allFlatExercises();
   list.forEach(function(ex){ exIndex[ex.id]=ex; if(ex.variants) ex.variants.forEach(function(v){ exIndex[v.id]=v; }); });
+  /* dedupe by movement name so old-program copies don't show as separate rows.
+     keep the live-cycle instance if there is one (else the first/newest). No data is changed. */
+  var liveIds={};
+  (PROG.cycles||[]).forEach(function(cy){ if(!cy.archived) (cy.days||[]).forEach(function(day){ (day.exercises||[]).forEach(function(e){ liveIds[e.id]=1; }); }); });
+  var byName={};
+  list.forEach(function(ex){
+    var k=(flatDisplayName(ex.name,ex.id)||"").trim().toLowerCase();
+    if(!k){ byName["id:"+ex.id]=ex; return; }
+    var cur=byName[k];
+    if(!cur || (liveIds[ex.id] && !liveIds[cur.id])) byName[k]=ex;
+  });
+  list=Object.keys(byName).map(function(k){ return byName[k]; });
   DAYOF={}; var dayset={};
   (PROG.cycles||[]).forEach(function(cy){ (cy.days||[]).forEach(function(day){ var lbl=day.title||day.id||""; (day.exercises||[]).forEach(function(ex){ if(!DAYOF[ex.id]){ DAYOF[ex.id]=lbl; dayset[lbl]=1; } }); }); });
   SHOW_DAYTAG = Object.keys(dayset).length>1;   /* only tag when there are multiple days to tell apart */

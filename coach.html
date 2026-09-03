@@ -169,6 +169,8 @@ tr.chipbar td{background:var(--bg2);padding:6px 10px}
 .gro-wo{display:flex;gap:8px;align-items:center;margin:6px 0}
 .gro-ex{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--hair-soft);font-size:.9rem;cursor:pointer}
 .gro-ex input{width:18px;height:18px;flex:0 0 auto}
+.exname:focus{outline:none;background:var(--accent-soft);border-radius:4px;padding:0 3px}
+.swaptag{font-size:.58rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--demo);background:var(--demo-soft);border-radius:999px;padding:2px 7px;cursor:pointer;margin-left:6px;vertical-align:middle}
 .msgcard{border:1px solid var(--hair);border-left:3px solid var(--accent);border-radius:10px;padding:10px 12px;margin:8px 0;background:var(--card)}
 .msgcard.resolved{border-left-color:var(--hair);opacity:.6}
 .msgmeta{font-size:.72rem;color:var(--ink2);margin-bottom:4px}
@@ -732,7 +734,7 @@ function renderProgramEditor(){
         var r1=el("div","exrow1");
         r1.appendChild(textInput(ex.name,"exercise name",function(v){ex.name=v; ex.hl=true;}));
         var mv=document.createElement("select");
-        var op0=document.createElement("option"); op0.textContent="Move to…"; op0.value=""; mv.appendChild(op0);
+        var op0=document.createElement("option"); op0.textContent="Add to…"; op0.value=""; mv.appendChild(op0);
         prog.cycles.forEach(function(cy2,c2){
           cy2.days.forEach(function(d2,dd2){
             if(c2===cyi&&dd2===di)return;
@@ -747,11 +749,11 @@ function renderProgramEditor(){
           if(!mv.value)return;
           pushCoachHistory();
           var parts=mv.value.split(":");
-          var ex2=day.exercises.splice(exi,1)[0];
-          ex2.hl=true;
-          prog.cycles[parts[0]].days[parts[1]].exercises.push(ex2);
+          var copy=JSON.parse(JSON.stringify(day.exercises[exi]));  /* same id -> shared history, source kept */
+          copy.hl=true;
+          prog.cycles[parts[0]].days[parts[1]].exercises.push(copy);
           saveProgramSoon(); renderProgramEditor();
-          toast("Moved. History goes with it.");
+          toast("Added. Old program kept; same history carries over.");
         });
         r1.appendChild(mv);
         var arcE=el("button","btn small","Archive"); arcE.type="button";
@@ -890,6 +892,7 @@ function exById(){
 async function loadLogs(){
   var host=$("tab-logs"); host.textContent="Loading…";
   await loadMeta();
+  GRO.data=await fetchClientFlat(currentSlug);   /* client overlay: swaps show/edit here too */
   var r=await fetch(url("/rest/v1/log_entries?client_slug=eq."+esc(currentSlug)+
     "&select=*&order=exercise_id.asc,row_index.asc"),{headers:headers()});
   if(!r.ok){ host.textContent="Could not load logs."; return; }
@@ -1003,11 +1006,42 @@ function renderLogsBody(){
   }
   updateLogHistBtns();
 }
+function coachSwap(span,ex){
+  var base=ex.name||"", cur=span.textContent;
+  span.contentEditable="true"; span.focus();
+  var sel=window.getSelection&&window.getSelection(); if(sel&&sel.selectAllChildren){ try{ sel.selectAllChildren(span); }catch(e){} }
+  function finish(){
+    span.contentEditable="false"; span.removeEventListener("blur",finish);
+    var v=span.textContent.trim();
+    if(!v||v===cur){ span.textContent=cur; return; }
+    GRO.data=GRO.data||{}; GRO.data.swaps=GRO.data.swaps||{}; GRO.data.swaps[ex.id]={to:v,from:base}; saveGrocerySoon();
+    span.textContent=v;
+    if(span.parentNode && !span.parentNode.querySelector(".swaptag")){
+      var sbg=el("span","swaptag","swapped"); sbg.title="Was: "+base+" · click to undo";
+      sbg.addEventListener("click",function(e){ e.preventDefault(); e.stopPropagation(); delete GRO.data.swaps[ex.id]; saveGrocerySoon(); span.textContent=ex.name; sbg.remove(); });
+      span.insertAdjacentElement("afterend",sbg);
+    }
+  }
+  span.addEventListener("blur",finish);
+  span.addEventListener("keydown",function(k){ if(k.key==="Enter"){ k.preventDefault(); span.blur(); } });
+}
 function renderLogBlock(ex,rows){
   var block=el("details","exblock");
   if(coachMeta[ex.id]&&coachMeta[ex.id].revisit) block.classList.add("revisit");
   var sum=el("summary");
-  var h=el("h3",null,ex.name);
+  var h=el("h3");
+  var swp0=GRO.data&&GRO.data.swaps&&GRO.data.swaps[ex.id];
+  var nameSpan=el("span","exname",(swp0&&swp0.to)||ex.name);
+  nameSpan.addEventListener("click",function(e){ if(nameSpan.isContentEditable) e.stopPropagation(); });
+  h.appendChild(nameSpan);
+  if(swp0){
+    var sbg=el("span","swaptag","swapped"); sbg.title="Was: "+(swp0.from||"")+" · click to undo";
+    sbg.addEventListener("click",function(e){ e.preventDefault(); e.stopPropagation(); delete GRO.data.swaps[ex.id]; saveGrocerySoon(); nameSpan.textContent=ex.name; sbg.remove(); });
+    h.appendChild(sbg);
+  }
+  var swpB=el("button","flagbtn","⇄"); swpB.type="button"; swpB.title="Swap for a different version"; swpB.style.fontSize=".95rem";
+  swpB.addEventListener("click",function(e){ e.preventDefault(); e.stopPropagation(); coachSwap(nameSpan,ex); });
+  h.appendChild(swpB);
   var flag=el("button","flagbtn","⚑"); flag.type="button"; flag.title="Mark to revisit (didn't get to it)";
   flag.addEventListener("click",function(e){
     e.preventDefault(); e.stopPropagation();
