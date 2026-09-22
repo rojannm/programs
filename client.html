@@ -918,6 +918,7 @@ function renderTable(ex,container){
 }
 
 function build(){
+  ensureSwapWeek();   /* drop any "just this week" swaps once Monday rolls over */
   document.title=(PROG.name||"Training")+" Training Program";
   document.getElementById("clientName").textContent=PROG.name||"Training Program";
   document.getElementById("clientSub").textContent=PROG.subtitle||"";
@@ -996,7 +997,7 @@ function build(){
         if(ex.struck)h3.classList.add("struck");
         esum.appendChild(h3);
         if(isSwapped(ex.id)){
-          var sbg=el("span","swaptag","swapped"); sbg.title="Was: "+((FLAT.swaps[ex.id].from)||"")+" · tap to undo";
+          var sbg=el("span","swaptag",swapLabel(FLAT.swaps[ex.id])); sbg.title="Was: "+((FLAT.swaps[ex.id].from)||"")+" · tap to undo";
           sbg.addEventListener("click",function(e){ e.preventDefault(); e.stopPropagation(); setSwap(ex.id,null); h3.textContent=flatDisplayName(ex.name,ex.id); sbg.remove(); });
           esum.appendChild(sbg);
         }
@@ -1404,7 +1405,7 @@ function renderExerciseFlat(ex){
   esum.appendChild(h3);
   if(SHOW_DAYTAG && DAYOF[ex.id]) esum.appendChild(el("span","daytag-flat",DAYOF[ex.id]));
   if(isSwapped(ex.id)){
-    var sb=el("span","swaptag","swapped"); sb.title="Was: "+((FLAT.swaps[ex.id].from)||"")+(CAN_EDIT_FLAT?" · tap to undo":"");
+    var sb=el("span","swaptag",swapLabel(FLAT.swaps[ex.id])); sb.title="Was: "+((FLAT.swaps[ex.id].from)||"")+(CAN_EDIT_FLAT?" · tap to undo":"");
     if(CAN_EDIT_FLAT) sb.addEventListener("click",function(e){ e.preventDefault(); e.stopPropagation(); setSwap(ex.id,null); h3.textContent=flatDisplayName(ex.name,ex.id); sb.remove(); });
     esum.appendChild(sb);
   }
@@ -1532,7 +1533,9 @@ function flatDisplayName(name,id){ var sw=id&&FLAT.swaps&&FLAT.swaps[id]; var n=
 /* ---- flat overlay: her own edits (non-negotiable tags, working-on list, renames, swaps) ---- */
 var FLAT={nonneg:[],workingOn:[],renames:{},mode:"structured",flagged:[],flagWeek:null,swaps:{}};
 function isSwapped(id){ return FLAT.swaps && FLAT.swaps[id]; }
-function setSwap(id,to,from){ FLAT.swaps=FLAT.swaps||{}; if(!to){ delete FLAT.swaps[id]; } else { FLAT.swaps[id]={to:to,from:from}; } saveFlatSoon(); }
+function setSwap(id,to,from,temp){ FLAT.swaps=FLAT.swaps||{}; if(!to){ delete FLAT.swaps[id]; } else { FLAT.swaps[id]={to:to,from:from,week:temp?weekStartIso():null}; } saveFlatSoon(); }
+function swapLabel(sw){ return (sw&&sw.week)?"swapped · this week":"swapped"; }
+function ensureSwapWeek(){ if(!FLAT.swaps) return; var w=weekStartIso(),ch=false; Object.keys(FLAT.swaps).forEach(function(id){ var s=FLAT.swaps[id]; if(s&&s.week&&s.week!==w){ delete FLAT.swaps[id]; ch=true; } }); if(ch) saveFlatSoon(); }
 var DAYOF={};   /* exId -> day label, for the grocery day tag */
 var SHOW_DAYTAG=false;
 function hasLogThisWeek(id){
@@ -1619,10 +1622,11 @@ function startSwap(h3,ex){
     h3.contentEditable="false"; h3.removeEventListener("blur",finish);
     var v=h3.textContent.trim();
     if(!v || v===cur){ h3.textContent=flatDisplayName(ex.name,ex.id); return; }
-    setSwap(ex.id, v, base); h3.textContent=v;
+    var temp=!confirm("Keep this swap permanently?\n\nOK = permanent\nCancel = just this week (reverts Monday)");
+    setSwap(ex.id, v, base, temp); h3.textContent=v;
     var esum=h3.parentNode;
     if(esum && !esum.querySelector(".swaptag")){
-      var sb=el("span","swaptag","swapped"); sb.title="Was: "+base+" · tap to undo";
+      var sb=el("span","swaptag",swapLabel(FLAT.swaps[ex.id])); sb.title="Was: "+base+" · tap to undo";
       sb.addEventListener("click",function(e){ e.preventDefault(); e.stopPropagation(); setSwap(ex.id,null); h3.textContent=flatDisplayName(ex.name,ex.id); sb.remove(); });
       h3.insertAdjacentElement("afterend", sb);
     }

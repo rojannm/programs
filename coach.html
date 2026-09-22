@@ -892,7 +892,7 @@ function exById(){
 async function loadLogs(){
   var host=$("tab-logs"); host.textContent="Loading…";
   await loadMeta();
-  GRO.data=await fetchClientFlat(currentSlug);   /* client overlay: swaps show/edit here too */
+  GRO.data=await fetchClientFlat(currentSlug); ensureSwapWeekCoach();   /* client overlay: swaps show/edit here too */
   var r=await fetch(url("/rest/v1/log_entries?client_slug=eq."+esc(currentSlug)+
     "&select=*&order=exercise_id.asc,row_index.asc"),{headers:headers()});
   if(!r.ok){ host.textContent="Could not load logs."; return; }
@@ -1006,6 +1006,9 @@ function renderLogsBody(){
   }
   updateLogHistBtns();
 }
+function swapWeekIso(){ var d=new Date(); var day=d.getDay(); d.setDate(d.getDate()-(day===0?6:day-1)); d.setHours(0,0,0,0); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function swapLabel(sw){ return (sw&&sw.week)?"swapped · this week":"swapped"; }
+function ensureSwapWeekCoach(){ if(!GRO.data||!GRO.data.swaps) return; var w=swapWeekIso(),ch=false; Object.keys(GRO.data.swaps).forEach(function(id){ var s=GRO.data.swaps[id]; if(s&&s.week&&s.week!==w){ delete GRO.data.swaps[id]; ch=true; } }); if(ch) saveGrocerySoon(); }
 function coachSwap(span,ex){
   var base=ex.name||"", cur=span.textContent;
   span.contentEditable="true"; span.focus();
@@ -1014,10 +1017,11 @@ function coachSwap(span,ex){
     span.contentEditable="false"; span.removeEventListener("blur",finish);
     var v=span.textContent.trim();
     if(!v||v===cur){ span.textContent=cur; return; }
-    GRO.data=GRO.data||{}; GRO.data.swaps=GRO.data.swaps||{}; GRO.data.swaps[ex.id]={to:v,from:base}; saveGrocerySoon();
+    var temp=!confirm("Keep this swap permanently?\n\nOK = permanent\nCancel = just this week (reverts Monday)");
+    GRO.data=GRO.data||{}; GRO.data.swaps=GRO.data.swaps||{}; GRO.data.swaps[ex.id]={to:v,from:base,week:temp?swapWeekIso():null}; saveGrocerySoon();
     span.textContent=v;
     if(span.parentNode && !span.parentNode.querySelector(".swaptag")){
-      var sbg=el("span","swaptag","swapped"); sbg.title="Was: "+base+" · click to undo";
+      var sbg=el("span","swaptag",swapLabel(GRO.data.swaps[ex.id])); sbg.title="Was: "+base+" · click to undo";
       sbg.addEventListener("click",function(e){ e.preventDefault(); e.stopPropagation(); delete GRO.data.swaps[ex.id]; saveGrocerySoon(); span.textContent=ex.name; sbg.remove(); });
       span.insertAdjacentElement("afterend",sbg);
     }
@@ -1035,7 +1039,7 @@ function renderLogBlock(ex,rows){
   nameSpan.addEventListener("click",function(e){ if(nameSpan.isContentEditable) e.stopPropagation(); });
   h.appendChild(nameSpan);
   if(swp0){
-    var sbg=el("span","swaptag","swapped"); sbg.title="Was: "+(swp0.from||"")+" · click to undo";
+    var sbg=el("span","swaptag",swapLabel(swp0)); sbg.title="Was: "+(swp0.from||"")+" · click to undo";
     sbg.addEventListener("click",function(e){ e.preventDefault(); e.stopPropagation(); delete GRO.data.swaps[ex.id]; saveGrocerySoon(); nameSpan.textContent=ex.name; sbg.remove(); });
     h.appendChild(sbg);
   }
@@ -1298,7 +1302,7 @@ async function fetchClientFlat(slug){
 }
 async function loadGrocery(){
   var host=$("tab-grocery"); host.textContent="Loading…";
-  GRO.data=await fetchClientFlat(currentSlug);
+  GRO.data=await fetchClientFlat(currentSlug); ensureSwapWeekCoach();
   renderGrocery();
 }
 function saveGrocerySoon(){ clearTimeout(groTimer); groTimer=setTimeout(saveGrocery,600); }
