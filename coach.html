@@ -1432,6 +1432,16 @@ async function loadMessages(){
       });
       card.appendChild(btn);
     }
+    var delb=el("button","btn small danger","Delete"); delb.type="button";
+    delb.addEventListener("click",async function(){
+      if(!confirm("Delete this message? This can't be undone.")) return;
+      try{
+        var r=await fetch(url("/rest/v1/client_messages?id=eq."+m.id),{method:"DELETE",headers:headers()});
+        if(!r.ok)throw new Error();
+        loadMessages(); updateMsgBadge();
+      }catch(e){ toast("Delete failed"); }
+    });
+    card.appendChild(delb);
     host.appendChild(card);
   });
 }

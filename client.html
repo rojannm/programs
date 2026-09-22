@@ -160,6 +160,18 @@ details.exercise.overdue > summary h3{color:var(--danger)}
 .nnbtn:hover,.penbtn:hover,.swapbtn:hover{color:var(--accent)}
 .daytag-flat{flex:0 0 auto;font-size:.6rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink2);background:var(--bg2);border:1px solid var(--hair);border-radius:999px;padding:2px 7px}
 .swaptag{flex:0 0 auto;font-size:.58rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--demo);background:var(--demo-soft);border-radius:999px;padding:2px 7px;cursor:pointer}
+.cattag{flex:0 0 auto;font-size:.58rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--green);background:var(--inset);border:1px solid var(--hair);border-radius:999px;padding:2px 7px}
+.cat-tally{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 0 12px;padding:8px 10px;background:var(--inset);border:1px solid var(--hair);border-radius:10px}
+.ct-lbl{font-size:.62rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink2)}
+.ct-chip{font-size:.72rem;font-weight:700;color:var(--green);background:var(--card);border:1px solid var(--hair);border-radius:999px;padding:2px 9px}
+.ct-none{font-size:.72rem;color:var(--ink2)}
+.catgroup{border:1px solid var(--hair);border-radius:12px;margin:8px 10px;overflow:hidden;background:var(--inset)}
+.catgroup>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:9px;padding:10px 12px}
+.catgroup>summary::-webkit-details-marker{display:none}
+.catname{font-family:"Fraunces",Georgia,serif;font-size:1rem;color:var(--green)}
+.catcount{margin-left:auto;font-size:.7rem;font-weight:700;color:var(--ink2)}
+.catbody{background:var(--card)}
+.catgroup .catbody details.exercise > summary{padding:12px 14px}
 details.exercise.isnonneg > summary h3{color:var(--accent)}
 details.exercise.isnonneg > summary h3::after{content:"non-negotiable";font-family:"Hanken Grotesk",sans-serif;font-size:.54rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);background:var(--accent-soft);border-radius:4px;padding:2px 5px;margin-left:8px;vertical-align:middle;white-space:nowrap}
 /* currently working on */
@@ -945,7 +957,7 @@ function build(){
     trackOpen(keys,"sec:keys");
   }
 
-  if(PROG.flat){ buildFlat(content); appendProgress(content); appendNutrition(content); appendDiscuss(content); return; }
+  if(PROG.flat){ buildFlat(content); appendProgress(content); appendArchived(content); appendNutrition(content); appendDiscuss(content); return; }
 
   content.appendChild(makeOverdueBanner());
   appendProgress(content);
@@ -1003,6 +1015,7 @@ function build(){
         }
         var ss=supersetTag(ex.name||"");
         if(ss)esum.appendChild(el("span","sstag",ss));
+        if(categoryOf(ex.id))esum.appendChild(el("span","cattag",categoryOf(ex.id)));
         if(ex.demo)esum.appendChild(el("span","demotag","demo with Rojan"));
         if(ex.hl)esum.appendChild(el("span","coachtag","from Rojan"));
         var swp=el("button","swapbtn","⇄"); swp.type="button"; swp.title="Swap for a different version";
@@ -1072,6 +1085,7 @@ function build(){
     content.appendChild(sec);
   });
 
+  appendArchived(content);
   appendNutrition(content);
   appendDiscuss(content);
 }
@@ -1106,7 +1120,7 @@ function appendDiscuss(content){
       });
     }
     sendBtn.addEventListener("click",function(){
-      var body=(fn.textContent||"").trim();
+      var body=(fn.innerText||fn.textContent||"").trim();   /* innerText keeps line breaks */
       if(!body){ toast("Write a note first"); return; }
       sendBtn.disabled=true;
       sendMessage(body).then(function(ok){
@@ -1133,6 +1147,38 @@ function appendNutrition(content){
   var p=el("div","nutrition-content"); p.appendChild(linkify(NUTRITION));
   b.appendChild(p); sec.appendChild(b); content.appendChild(sec);
   trackOpen(sec,"sec:nutrition");
+}
+function renderReadonlyTable(ex,host){
+  host.textContent="";
+  var cols=colsFor(ex), rows=rowsFor(ex);
+  if(!rows.length){ host.appendChild(el("p","ex-note","No logged history.")); return; }
+  var wrap=el("div","tblwrap"), t=el("table"), thead=el("thead"), htr=el("tr");
+  cols.forEach(function(c){ htr.appendChild(el("th",null,c)); });
+  thead.appendChild(htr); t.appendChild(thead);
+  var tb=el("tbody");
+  rows.forEach(function(r){ var tr=el("tr"); cols.forEach(function(c,i){ tr.appendChild(el("td",null,r[i]!=null?r[i]:"")); }); tb.appendChild(tr); });
+  t.appendChild(tb); wrap.appendChild(t); host.appendChild(wrap);
+}
+function appendArchived(content){
+  var arch=(PROG.archived_exercises||[]).filter(function(ex){ return ex && ex.name; });
+  if(!arch.length) return;
+  var sec=el("details","section"); sec.id="sec-archived";
+  var sm=el("summary"); sm.appendChild(el("span","chev")); sm.appendChild(el("h2",null,"Archived movements")); sm.appendChild(el("span","count",String(arch.length))); sec.appendChild(sm);
+  var body=el("div","section-body");
+  body.appendChild(el("p","ex-note","Moves retired for now. Their logged history is kept — tap one to see it."));
+  arch.forEach(function(ex){
+    exIndex[ex.id]=ex;
+    var exd=el("details","exercise"); exd.dataset.exid=ex.id;
+    var esum=el("summary"); esum.appendChild(el("span","chev"));
+    esum.appendChild(el("h3",null,flatDisplayName(ex.name,ex.id)));
+    exd.appendChild(esum);
+    var eb=el("div","ex-body"); var th=el("div"); eb.appendChild(th); exd.appendChild(eb);
+    var rendered=false;
+    exd.addEventListener("toggle",function(){ if(exd.open&&!rendered){ renderReadonlyTable(ex,th); rendered=true; } });
+    body.appendChild(exd);
+  });
+  sec.appendChild(body); content.appendChild(sec);
+  trackOpen(sec,"sec:archived");
 }
 /* ---------- progress view (read-only: InBody + FMS + body map) ---------- */
 function pnumP(x){ var v=parseFloat(x); return isNaN(v)?null:v; }
@@ -1394,7 +1440,7 @@ function renderExerciseFlat(ex){
     var vis=isDoneWeek(ex.id);
     done.classList.toggle("done",vis); exd.classList.toggle("doneToday",vis);
     if(isFlagged(ex.id)) exd.classList.toggle("flaghit",vis);
-    renderSessions(); updateOverdue();
+    renderSessions(); updateOverdue(); updateCatTally();
     toast(vis?"Nice — logged":"Unmarked");
   });
   esum.appendChild(done);
@@ -1420,6 +1466,9 @@ function renderExerciseFlat(ex){
     var pen=el("button","penbtn","✎"); pen.type="button"; pen.title="Rename this exercise";
     pen.addEventListener("click",function(e){ e.preventDefault(); e.stopPropagation(); startRename(h3,ex); });
     esum.appendChild(pen);
+    var catb=el("button","penbtn","🏷"); catb.type="button"; catb.title="Set category (Chest, Legs, Full body…)";
+    catb.addEventListener("click",function(e){ e.preventDefault(); e.stopPropagation(); var c=prompt("Category for this movement (e.g. Chest, Legs, Full body). Leave blank to clear:", categoryOf(ex.id)); if(c!==null){ setCategory(ex.id,c); build(); } });
+    esum.appendChild(catb);
   }
   var flag=el("button","flagbtn"+(isFlagged(ex.id)?" on":""),"⚑"); flag.type="button"; flag.title="Flag for this week (clears Monday)";
   flag.addEventListener("click",function(e){
@@ -1462,6 +1511,7 @@ function syncFlatDoneState(){
     if(isFlagged(id)) node.classList.toggle("flaghit",on);
     var box=node.querySelector(".donebox"); if(box) box.classList.toggle("done",on);
   });
+  updateCatTally();
 }
 function sessDelExercise(iso,exId){
   if(SESS.byDate[iso]) SESS.byDate[iso]=SESS.byDate[iso].filter(function(x){return x.id!==exId;});
@@ -1531,7 +1581,21 @@ function updateOverdue(){
 function flatSortKey(name){ return (name||"").replace(/^\d+\/\d+\s+/,"").toLowerCase().trim(); }
 function flatDisplayName(name,id){ var sw=id&&FLAT.swaps&&FLAT.swaps[id]; var n=(sw&&sw.to)||(id&&FLAT.renames&&FLAT.renames[id])||name||""; return n.replace(/^\d+\/\d+\s+/,""); }
 /* ---- flat overlay: her own edits (non-negotiable tags, working-on list, renames, swaps) ---- */
-var FLAT={nonneg:[],workingOn:[],renames:{},mode:"structured",flagged:[],flagWeek:null,swaps:{}};
+var FLAT={nonneg:[],workingOn:[],renames:{},mode:"structured",flagged:[],flagWeek:null,swaps:{},categories:{}};
+function categoryOf(id){ return (FLAT.categories&&FLAT.categories[id])||""; }
+function setCategory(id,cat){ FLAT.categories=FLAT.categories||{}; cat=(cat||"").trim(); if(!cat) delete FLAT.categories[id]; else FLAT.categories[id]=cat; saveFlatSoon(); }
+var FLATLIST=[];
+function renderCatTally(host){
+  if(!host) return; host.textContent="";
+  var tally={};
+  FLATLIST.forEach(function(ex){ var c=categoryOf(ex.id); if(c && isDoneWeek(ex.id)) tally[c]=(tally[c]||0)+1; });
+  var tnames=Object.keys(tally).sort();
+  var tw=el("div","cat-tally"); tw.appendChild(el("span","ct-lbl","This week"));
+  if(!tnames.length){ tw.appendChild(el("span","ct-none","nothing hit yet")); }
+  tnames.forEach(function(c){ tw.appendChild(el("span","ct-chip",c+" "+tally[c])); });
+  host.appendChild(tw);
+}
+function updateCatTally(){ renderCatTally(document.getElementById("catTallyHost")); }
 function isSwapped(id){ return FLAT.swaps && FLAT.swaps[id]; }
 function setSwap(id,to,from,temp){ FLAT.swaps=FLAT.swaps||{}; if(!to){ delete FLAT.swaps[id]; } else { FLAT.swaps[id]={to:to,from:from,week:temp?weekStartIso():null}; } saveFlatSoon(); }
 function swapLabel(sw){ return (sw&&sw.week)?"swapped · this week":"swapped"; }
@@ -1559,7 +1623,7 @@ async function fetchFlatOverlay(){
   try{
     var r=await fetch(sbUrl("/rest/v1/client_flat?client_slug=eq."+encodeURIComponent(SLUG)+"&select=data"),{headers:sbHeaders()});
     if(!r.ok) return; var a=await r.json();
-    if(a.length){ var d={}; try{ d=JSON.parse(a[0].data||"{}"); }catch(e){} FLAT.nonneg=d.nonneg||[]; FLAT.workingOn=d.workingOn||[]; FLAT.renames=d.renames||{}; FLAT.mode=d.mode||"structured"; FLAT.flagged=d.flagged||[]; FLAT.flagWeek=d.flagWeek||null; FLAT.swaps=d.swaps||{}; }
+    if(a.length){ var d={}; try{ d=JSON.parse(a[0].data||"{}"); }catch(e){} FLAT.nonneg=d.nonneg||[]; FLAT.workingOn=d.workingOn||[]; FLAT.renames=d.renames||{}; FLAT.mode=d.mode||"structured"; FLAT.flagged=d.flagged||[]; FLAT.flagWeek=d.flagWeek||null; FLAT.swaps=d.swaps||{}; FLAT.categories=d.categories||{}; }
   }catch(e){}
 }
 function saveFlatSoon(){ clearTimeout(flatTimer); flatTimer=setTimeout(saveFlat,700); }
@@ -1567,7 +1631,7 @@ function saveFlat(){
   if(!cloudEnabled()) return;
   fetch(sbUrl("/rest/v1/client_flat?on_conflict=client_slug"),{
     method:"POST",headers:sbHeaders({"Prefer":"resolution=merge-duplicates,return=minimal"}),
-    body:JSON.stringify([{client_slug:SLUG,data:JSON.stringify({nonneg:FLAT.nonneg,workingOn:FLAT.workingOn,renames:FLAT.renames,mode:FLAT.mode,flagged:FLAT.flagged,flagWeek:FLAT.flagWeek,swaps:FLAT.swaps}),updated_at:new Date().toISOString()}])
+    body:JSON.stringify([{client_slug:SLUG,data:JSON.stringify({nonneg:FLAT.nonneg,workingOn:FLAT.workingOn,renames:FLAT.renames,mode:FLAT.mode,flagged:FLAT.flagged,flagWeek:FLAT.flagWeek,swaps:FLAT.swaps,categories:FLAT.categories}),updated_at:new Date().toISOString()}])
   }).catch(function(){});
 }
 function renderWorkingOn(host){
@@ -1711,9 +1775,27 @@ function buildFlat(content){
   var sb=el("div","section-body"); sb.id="sessionsBody"; sess.appendChild(sb);
   content.appendChild(sess); trackOpen(sess,"sec:sessions");
 
+  /* weekly tally by category, so she can see "chest 2, legs 1" at a glance */
+  var anyCat=list.some(function(ex){ return categoryOf(ex.id); });
+  if(anyCat){
+    FLATLIST=list; var th=el("div"); th.id="catTallyHost"; content.appendChild(th); renderCatTally(th);
+  }
+
   var flat=el("div","flatlist section");
   flat.style.cssText="overflow:hidden";
-  list.forEach(function(ex){ flat.appendChild(renderExerciseFlat(ex)); });
+  if(anyCat){
+    var groups={};
+    list.forEach(function(ex){ var c=categoryOf(ex.id)||"Uncategorized"; (groups[c]=groups[c]||[]).push(ex); });
+    var gnames=Object.keys(groups).sort(function(a,b){ if(a==="Uncategorized")return 1; if(b==="Uncategorized")return -1; return a.toLowerCase()<b.toLowerCase()?-1:1; });
+    gnames.forEach(function(c){
+      var cd=el("details","catgroup"); cd.open=true;
+      var cs=el("summary","catsum"); cs.appendChild(el("span","chev")); cs.appendChild(el("span","catname",c)); cs.appendChild(el("span","catcount",String(groups[c].length))); cd.appendChild(cs);
+      var inner=el("div","catbody"); groups[c].forEach(function(ex){ inner.appendChild(renderExerciseFlat(ex)); }); cd.appendChild(inner);
+      flat.appendChild(cd); trackOpen(cd,"cat:"+c);
+    });
+  }else{
+    list.forEach(function(ex){ flat.appendChild(renderExerciseFlat(ex)); });
+  }
   content.appendChild(flat);
 
   renderSessions(); updateOverdue();
