@@ -173,6 +173,8 @@ tr.chipbar td{background:var(--bg2);padding:6px 10px}
 .gro-tagname{flex:1 1 auto;min-width:120px}
 .btn.small.placement{color:var(--green)}
 .btn.small.placement.isextra{color:var(--demo);border-color:var(--demo)}
+.varedit{margin:6px 0 2px;padding:8px 10px;background:var(--inset);border:1px solid var(--hair);border-radius:8px}
+.varedit-h{font-size:.68rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);margin-bottom:6px}
 .cattags{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center}
 .cattag{flex:0 0 auto;font-size:.58rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--green);background:var(--inset);border:1px solid var(--hair);border-radius:999px;padding:2px 7px}
 .btn.primary{background:var(--green);color:#fff;border-color:var(--green)}
@@ -574,6 +576,27 @@ $("tab-program").addEventListener("focusin",function(){ pushCoachHistory(); });
 function newExId(dayId){
   return (dayId||"x").toLowerCase()+"-"+randToken(6);
 }
+/* ---- multiple titled tables per movement (variants) ---- */
+function ensureVariants(ex){
+  if(!ex.variants || !ex.variants.length){
+    ex.variants=[{id:ex.id, name:(ex.label||ex.name||"Table 1"), cols:(ex.cols||["Date","Weight","Set","Reps"]).slice(), seed:ex.seed}];
+  }
+}
+function addVariant(ex,title){
+  ensureVariants(ex);
+  ex.variants.push({id:newExId("t"), name:title||("Table "+(ex.variants.length+1)), cols:(ex.cols||["Date","Weight","Set","Reps"]).slice()});
+}
+function combineInto(targetEx, cyi, di, exi){
+  var src=prog.cycles[cyi].days[di].exercises[exi];
+  if(!src || src===targetEx) return;
+  ensureVariants(targetEx);
+  if(src.variants && src.variants.length){
+    src.variants.forEach(function(v){ targetEx.variants.push({id:v.id, name:v.name, cols:(v.cols||["Date","Weight","Set","Reps"]).slice(), seed:v.seed}); });
+  }else{
+    targetEx.variants.push({id:src.id, name:(src.label||src.name||"Table"), cols:(src.cols||["Date","Weight","Set","Reps"]).slice(), seed:src.seed});
+  }
+  prog.cycles[cyi].days[di].exercises.splice(exi,1);
+}
 function textInput(value,placeholder,onchange){
   var i=document.createElement("input");
   i.type="text"; i.value=value||""; i.placeholder=placeholder||"";
@@ -820,6 +843,32 @@ function renderProgramEditor(){
         colsI.style.maxWidth="220px";
         meta.appendChild(colsI);
         main.appendChild(meta);
+        /* extra tables + combine */
+        var trow=el("div","exrow1"); trow.style.marginTop="4px";
+        var addT=el("button","btn small","+ Extra table"); addT.type="button";
+        addT.addEventListener("click",function(){ var title=prompt("Title for the new table (e.g. Dropset, Backoff):",""); if(title===null)return; pushCoachHistory(); addVariant(ex,title.trim()); saveProgramSoon(); renderProgramEditor(); });
+        trow.appendChild(addT);
+        var comb=document.createElement("select");
+        var c0=document.createElement("option"); c0.textContent="Combine in…"; c0.value=""; comb.appendChild(c0);
+        prog.cycles.forEach(function(cy2,c2){ cy2.days.forEach(function(d2,dd2){ (d2.exercises||[]).forEach(function(e2,ei2){ if(c2===cyi&&dd2===di&&ei2===exi)return; if(!e2.name)return; var op=document.createElement("option"); op.value=c2+":"+dd2+":"+ei2; op.textContent=e2.name+"  ("+(cy2.label||"")+"/"+(d2.title||d2.id)+")"; comb.appendChild(op); }); }); });
+        comb.style.width="auto";
+        comb.addEventListener("change",function(){ if(!comb.value)return; var p=comb.value.split(":"); var srcName=prog.cycles[p[0]].days[p[1]].exercises[p[2]].name; if(!confirm("Combine \""+srcName+"\" into \""+ex.name+"\"? It becomes a titled table under this movement and its history carries over. The separate \""+srcName+"\" is removed.")){ comb.value=""; return; } pushCoachHistory(); combineInto(ex, +p[0], +p[1], +p[2]); saveProgramSoon(); renderProgramEditor(); toast("Combined. Both tables kept."); });
+        trow.appendChild(comb);
+        main.appendChild(trow);
+        if(ex.variants && ex.variants.length){
+          var vb=el("div","varedit");
+          vb.appendChild(el("div","varedit-h","Tables under this movement"));
+          ex.variants.forEach(function(v,vi){
+            var vr=el("div","exrow1");
+            vr.appendChild(textInput(v.name,"table title",function(val){v.name=val;}));
+            var vcols=textInput((v.cols||["Date","Weight","Set","Reps"]).join(", "),"columns",function(val){ v.cols=val.split(",").map(function(x){return x.trim();}).filter(Boolean); }); vcols.style.maxWidth="200px"; vr.appendChild(vcols);
+            var vdel=el("button","btn small danger","✕"); vdel.type="button"; vdel.disabled=ex.variants.length<=1;
+            vdel.addEventListener("click",function(){ if(!confirm("Remove the \""+(v.name||"")+"\" table from this movement? Its logged history stays in the database.")) return; pushCoachHistory(); ex.variants.splice(vi,1); if(ex.variants.length===1 && ex.variants[0].id===ex.id){ ex.variants=null; } saveProgramSoon(); renderProgramEditor(); });
+            vr.appendChild(vdel);
+            vb.appendChild(vr);
+          });
+          main.appendChild(vb);
+        }
         card.appendChild(main);
         list.appendChild(card);
       });
@@ -1053,7 +1102,13 @@ function renderLogsBody(){
       var exs=day.exercises||[];
       if(!exs.length) return;
       var det=dayBlock((cy.label||"")+" · "+(day.title||day.id), exs.length);
-      exs.forEach(function(ex){ det.appendChild(renderLogBlock(ex, logModel[ex.id]||[])); });
+      exs.forEach(function(ex){
+        if(ex.variants && ex.variants.length){
+          ex.variants.forEach(function(v){ det.appendChild(renderLogBlock({id:v.id, name:(ex.name||"")+" · "+(v.name||""), cols:v.cols||ex.cols}, logModel[v.id]||[])); });
+        }else{
+          det.appendChild(renderLogBlock(ex, logModel[ex.id]||[]));
+        }
+      });
       host.appendChild(det);
     });
   });

@@ -1083,7 +1083,7 @@ function build(){
         exd.appendChild(esum);
         var ebody=el("div","ex-body");
         if(ex.note)ebody.appendChild(el("p","ex-note",ex.note));
-        if(ex.label)ebody.appendChild(el("p","tbl-label",ex.label));
+        if(ex.label && !(ex.variants&&ex.variants.length))ebody.appendChild(el("p","tbl-label",ex.label));
         (function(){
           var noteWrap=el("div","exnote-wrap");
           var lbl=el("div","exnote-lbl","Your notes");
@@ -1100,13 +1100,13 @@ function build(){
         var tableHost=el("div");
         ebody.appendChild(tableHost); exd.appendChild(ebody);
         var rendered=false;
-        function rerender(){ if(rendered)renderTable(ex,tableHost); }
+        function rerender(){ if(rendered)renderFlatTables(ex,tableHost); }
         exd.addEventListener("toggle",function(){
-          if(exd.open&&!rendered){ renderTable(ex,tableHost); rendered=true; }
+          if(exd.open&&!rendered){ renderFlatTables(ex,tableHost); rendered=true; }
         });
         exd.rerender=function(){ rerender(); };
         trackOpen(exd,"ex:"+ex.id);
-        if(exd.open){ renderTable(ex,tableHost); rendered=true; }
+        if(exd.open){ renderFlatTables(ex,tableHost); rendered=true; }
         body.appendChild(exd); exDetails.push(exd);
       });
       function updateTog(){
