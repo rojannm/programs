@@ -1035,7 +1035,22 @@ function build(){
         exIndex[ex.id]=ex;
         var exd=el("details","exercise"); exd.dataset.exid=ex.id;
         if(META[ex.id]&&META[ex.id].revisit) exd.classList.add("revisit");
-        var esum=el("summary"); esum.appendChild(el("span","chev"));
+        var esum=el("summary");
+        (function(){
+          var dwk=isDoneWeek(ex.id); if(dwk) exd.classList.add("doneToday");
+          var db=el("button","donebox"+(dwk?" done":"")); db.type="button";
+          db.title="Mark done this week"; db.setAttribute("aria-label","Mark "+ex.name+" done this week");
+          db.addEventListener("click",function(e){
+            e.preventDefault(); e.stopPropagation();
+            toggleDone(ex.id,ex.name);
+            var vis=isDoneWeek(ex.id);
+            db.classList.toggle("done",vis); exd.classList.toggle("doneToday",vis);
+            updateCatTally(); updateOverdueAll();
+            toast(vis?"Nice — logged":"Unmarked");
+          });
+          esum.appendChild(db);
+        })();
+        esum.appendChild(el("span","chev"));
         var h3=el("h3",null,flatDisplayName(ex.name,ex.id));
         h3.addEventListener("click",function(e){ if(h3.isContentEditable) e.stopPropagation(); });
         if(ex.struck)h3.classList.add("struck");
@@ -1430,6 +1445,14 @@ function showOverdueBanner(n, items){
   list.style.display=wasOpen?"":"none";
 }
 /* "haven't hit this in a while" for regular (non-flat) clients */
+function syncStructDone(){
+  if(PROG && PROG.flat) return;
+  document.querySelectorAll("details.exercise[data-exid]").forEach(function(node){
+    var box=node.querySelector(":scope > summary > .donebox"); if(!box) return;
+    var on=isDoneWeek(node.dataset.exid);
+    node.classList.toggle("doneToday",on); box.classList.toggle("done",on);
+  });
+}
 function updateOverdueAll(){
   if(PROG && PROG.flat) return;
   var cutoff=new Date(); cutoff.setDate(cutoff.getDate()-14);
@@ -1447,6 +1470,7 @@ function updateOverdueAll(){
   });
   items.sort(function(a,b){ return a.name.toLowerCase()<b.name.toLowerCase()?-1:1; });
   showOverdueBanner(n, items);
+  syncStructDone(); updateCatTally();   /* keep structured checkboxes + body-part report current */
 }
 
 /* ---------- flat (personal) mode ---------- */
