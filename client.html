@@ -2051,10 +2051,20 @@ document.getElementById("themeBtn").addEventListener("click",function(){
 applyTheme();
 
 /* search / filter exercises */
+function exMatchesTables(exd,q){
+  var id=exd.dataset.exid; if(!id) return false;
+  var ex=exIndex[id]; var ids=[id];
+  if(ex && ex.variants) ex.variants.forEach(function(v){ ids.push(v.id); });
+  return ids.some(function(xid){
+    var rows=store.rows[xid]||(exIndex[xid]&&exIndex[xid].seed)||[];
+    return rows.some(function(r){ return (r||[]).some(function(c){ return (""+(c||"")).toLowerCase().indexOf(q)>=0; }); });
+  });
+}
 function runExSearch(q){
   q=(q||"").trim().toLowerCase();
   document.querySelectorAll("details.exercise").forEach(function(ex){
-    var h=ex.querySelector("h3"); var m=!q || (h && h.textContent.toLowerCase().indexOf(q)>=0);
+    var h=ex.querySelector("h3");
+    var m=!q || (h && h.textContent.toLowerCase().indexOf(q)>=0) || (q && exMatchesTables(ex,q));
     ex.classList.toggle("nomatch",!m);
     if(q&&m){ ex.open=true; var d=ex.closest("details.day"); if(d)d.open=true; var s=ex.closest("details.section"); if(s)s.open=true; }
   });

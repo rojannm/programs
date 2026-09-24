@@ -1079,7 +1079,12 @@ function renderLogsBody(){
     host.querySelectorAll(".logday").forEach(function(det){
       var anyVis=false;
       det.querySelectorAll(".exblock").forEach(function(b){
-        var h=b.querySelector("h3"); var m=!q||(h&&h.textContent.toLowerCase().indexOf(q)>=0);
+        var h=b.querySelector("h3");
+        var m=!q||(h&&h.textContent.toLowerCase().indexOf(q)>=0);
+        if(!m && q){   /* also match anything logged in the table cells (swapped-in movements, notes, weights) */
+          var cells=b.querySelectorAll("td[data-ci]");
+          for(var i=0;i<cells.length;i++){ if(cells[i].textContent.toLowerCase().indexOf(q)>=0){ m=true; break; } }
+        }
         b.classList.toggle("nomatch",!m); if(m)anyVis=true;
         if(q&&m) b.open=true;
       });
