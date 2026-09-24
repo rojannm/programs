@@ -171,6 +171,8 @@ tr.chipbar td{background:var(--bg2);padding:6px 10px}
 .gro-ex input{width:18px;height:18px;flex:0 0 auto}
 .gro-tagrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;border-bottom:1px solid var(--hair-soft);font-size:.9rem}
 .gro-tagname{flex:1 1 auto;min-width:120px}
+.btn.small.placement{color:var(--green)}
+.btn.small.placement.isextra{color:var(--demo);border-color:var(--demo)}
 .cattags{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center}
 .cattag{flex:0 0 auto;font-size:.58rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--green);background:var(--inset);border:1px solid var(--hair);border-radius:999px;padding:2px 7px}
 .btn.primary{background:var(--green);color:#fff;border-color:var(--green)}
@@ -976,7 +978,7 @@ function coachHitThisWeek(exId){ var rows=logModel[exId]||[]; var ws=swapWeekIso
 function coachBodyReport(host){
   host.textContent="";
   var list=[], seen={};
-  (prog.cycles||[]).forEach(function(cy){(cy.days||[]).forEach(function(day){(day.exercises||[]).forEach(function(ex){ if(seen[ex.id]||!ex.name)return; seen[ex.id]=1; list.push(ex); });});});
+  (prog.cycles||[]).forEach(function(cy){(cy.days||[]).forEach(function(day){(day.exercises||[]).forEach(function(ex){ if(seen[ex.id]||!ex.name||coachIsExtra(ex.id))return; seen[ex.id]=1; list.push(ex); });});});
   if(!list.some(function(ex){ return coachTagsOf(ex.id).length; })) return false;
   var cats={},subHit={},known={}; coachAllTags().forEach(function(t){known[t]=1;});
   list.forEach(function(ex){ coachTagsOf(ex.id).forEach(function(t){known[t]=1;}); });
@@ -1402,6 +1404,9 @@ function coachSetSubs(id,arr){ GRO.data.subcats=GRO.data.subcats||{}; arr=(arr||
 function coachToggleSub(id,t){ t=(t||"").trim(); if(!t)return; var a=coachSubsOf(id); var i=a.indexOf(t); if(i>=0)a.splice(i,1); else a.push(t); coachSetSubs(id,a); }
 function coachAddSub(t){ t=(t||"").trim(); if(!t)return; GRO.data.subList=GRO.data.subList||[]; if(GRO.data.subList.indexOf(t)<0){ GRO.data.subList.push(t); saveGrocerySoon(); } }
 function coachAllSubs(){ var s={}; (GRO.data.subList||[]).forEach(function(t){if(t)s[t]=1;}); Object.keys(GRO.data.subcats||{}).forEach(function(id){ coachSubsOf(id).forEach(function(t){if(t)s[t]=1;}); }); return Object.keys(s).sort(function(a,b){return a.toLowerCase()<b.toLowerCase()?-1:1;}); }
+/* placement: structured (required) vs grocery pool (extra/optional) */
+function coachIsExtra(id){ return GRO.data.extras && GRO.data.extras.indexOf(id)>=0; }
+function coachToggleExtra(id){ GRO.data.extras=GRO.data.extras||[]; var i=GRO.data.extras.indexOf(id); if(i>=0)GRO.data.extras.splice(i,1); else GRO.data.extras.push(id); saveGrocerySoon(); }
 function openCoachTagPicker(ex,onChange){
   var back=el("div","tagpick-back"); var box=el("div","tagpick");
   box.appendChild(el("div","tagpick-h","Tags for "+(ex.name||"").replace(/^\d+\/\d+\s+/,"")));
@@ -1443,9 +1448,9 @@ function openCoachTagPicker(ex,onChange){
   back.appendChild(box); document.body.appendChild(back); setTimeout(function(){try{inp.focus();}catch(e){}},30);
 }
 function renderGroTagSection(host){
-  host.appendChild(el("h3","prof-h","Categorize movements"));
-  host.appendChild(el("p","note","Tag each movement (Chest, Legs, Full body…). Tags show on the client's structured view and feed the weekly body-part tally. A movement can have more than one tag."));
-  GRO.data.categories=GRO.data.categories||{}; GRO.data.tagList=GRO.data.tagList||[];
+  host.appendChild(el("h3","prof-h","Movements: tags & placement"));
+  host.appendChild(el("p","note","Tag each movement (Chest, Legs…) and set where it lives. Structured = the required 'needs to hit' program. Extra = the optional grocery pool the client only sees when they flip to the Extras view. Extras don't trigger overdue nags or count in the required tally."));
+  GRO.data.categories=GRO.data.categories||{}; GRO.data.tagList=GRO.data.tagList||[]; GRO.data.extras=GRO.data.extras||[];
   var seen={};
   (prog.cycles||[]).forEach(function(cy){(cy.days||[]).forEach(function(day){(day.exercises||[]).forEach(function(ex){
     if(seen[ex.id]||!ex.name)return; seen[ex.id]=1;
@@ -1454,6 +1459,11 @@ function renderGroTagSection(host){
     var chips=el("span","cattags"); row.appendChild(chips);
     function drawChips(){ chips.textContent=""; coachTagsOf(ex.id).forEach(function(t){ chips.appendChild(el("span","cattag",t)); }); }
     drawChips();
+    var pb=el("button","btn small placement"); pb.type="button";
+    function drawPlace(){ var ex2=coachIsExtra(ex.id); pb.textContent=ex2?"Extra":"Structured"; pb.classList.toggle("isextra",ex2); }
+    drawPlace();
+    pb.addEventListener("click",function(){ coachToggleExtra(ex.id); drawPlace(); });
+    row.appendChild(pb);
     var b=el("button","btn small","🏷 Tag"); b.type="button";
     b.addEventListener("click",function(){ openCoachTagPicker(ex,drawChips); });
     row.appendChild(b); host.appendChild(row);
