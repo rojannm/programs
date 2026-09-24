@@ -169,6 +169,20 @@ tr.chipbar td{background:var(--bg2);padding:6px 10px}
 .gro-wo{display:flex;gap:8px;align-items:center;margin:6px 0}
 .gro-ex{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--hair-soft);font-size:.9rem;cursor:pointer}
 .gro-ex input{width:18px;height:18px;flex:0 0 auto}
+.gro-tagrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;border-bottom:1px solid var(--hair-soft);font-size:.9rem}
+.gro-tagname{flex:1 1 auto;min-width:120px}
+.cattags{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center}
+.cattag{flex:0 0 auto;font-size:.58rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--green);background:var(--inset);border:1px solid var(--hair);border-radius:999px;padding:2px 7px}
+.btn.primary{background:var(--green);color:#fff;border-color:var(--green)}
+.tagpick-back{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px}
+.tagpick{background:var(--card);border:1px solid var(--hair);border-radius:16px;padding:16px;width:min(420px,100%);max-height:80vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.3)}
+.tagpick-h{font-family:"Fraunces",Georgia,serif;font-size:1.05rem;margin:0 0 12px;color:var(--ink)}
+.tagpick-chips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px}
+.tagchip{font-size:.8rem;font-weight:600;color:var(--ink2);background:var(--inset);border:1px solid var(--hair);border-radius:999px;padding:5px 12px;cursor:pointer}
+.tagchip.on{color:#fff;background:var(--green);border-color:var(--green)}
+.tagpick-add{display:flex;gap:8px;margin-bottom:14px}
+.tagpick-inp{flex:1;font-size:.9rem;padding:7px 10px;border:1px solid var(--hair);border-radius:9px;background:var(--bg2);color:var(--ink)}
+.tagpick-done{width:100%;margin:0}
 .exname:focus{outline:none;background:var(--accent-soft);border-radius:4px;padding:0 3px}
 .swaptag{font-size:.58rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--demo);background:var(--demo-soft);border-radius:999px;padding:2px 7px;cursor:pointer;margin-left:6px;vertical-align:middle}
 .msgcard{border:1px solid var(--hair);border-left:3px solid var(--accent);border-radius:10px;padding:10px 12px;margin:8px 0;background:var(--card)}
@@ -1328,10 +1342,59 @@ function renderGroWorkingOn(host){
   add.addEventListener("click",function(){ GRO.data.workingOn=GRO.data.workingOn||[]; GRO.data.workingOn.push(""); renderGroWorkingOn(host); var last=host.querySelector(".gro-wo:last-child input"); if(last)last.focus(); });
   host.appendChild(add);
 }
+/* ---- coach-side tagging: writes into the client's client_flat overlay ---- */
+function coachTagsOf(id){ var v=GRO.data&&GRO.data.categories&&GRO.data.categories[id]; if(!v)return[]; return Array.isArray(v)?v.slice():[v]; }
+function coachSetTags(id,arr){ GRO.data.categories=GRO.data.categories||{}; arr=(arr||[]).filter(Boolean); if(arr.length)GRO.data.categories[id]=arr; else delete GRO.data.categories[id]; saveGrocerySoon(); }
+function coachToggleTag(id,t){ t=(t||"").trim(); if(!t)return; var a=coachTagsOf(id); var i=a.indexOf(t); if(i>=0)a.splice(i,1); else a.push(t); coachSetTags(id,a); }
+function coachAddTag(t){ t=(t||"").trim(); if(!t)return; GRO.data.tagList=GRO.data.tagList||[]; if(GRO.data.tagList.indexOf(t)<0){ GRO.data.tagList.push(t); saveGrocerySoon(); } }
+function coachAllTags(){ var s={}; (GRO.data.tagList||[]).forEach(function(t){if(t)s[t]=1;}); Object.keys(GRO.data.categories||{}).forEach(function(id){ coachTagsOf(id).forEach(function(t){if(t)s[t]=1;}); }); return Object.keys(s).sort(function(a,b){return a.toLowerCase()<b.toLowerCase()?-1:1;}); }
+function openCoachTagPicker(ex,onChange){
+  var back=el("div","tagpick-back"); var box=el("div","tagpick");
+  box.appendChild(el("div","tagpick-h","Tags for "+(ex.name||"").replace(/^\d+\/\d+\s+/,"")));
+  var chips=el("div","tagpick-chips"); box.appendChild(chips);
+  function draw(){ chips.textContent="";
+    var tags=coachAllTags();
+    if(!tags.length) chips.appendChild(el("span","note","No tags yet. Add one below."));
+    tags.forEach(function(t){ var on=coachTagsOf(ex.id).indexOf(t)>=0; var c=el("button","tagchip"+(on?" on":""),t); c.type="button";
+      c.addEventListener("click",function(){ coachToggleTag(ex.id,t); draw(); if(onChange)onChange(); }); chips.appendChild(c); });
+  }
+  draw();
+  var addrow=el("div","tagpick-add");
+  var inp=document.createElement("input"); inp.type="text"; inp.placeholder="Add new tag"; inp.className="tagpick-inp";
+  var addb=el("button","btn small","Add"); addb.type="button";
+  function doAdd(){ var v=(inp.value||"").trim(); if(!v)return; coachAddTag(v); coachToggleTag(ex.id,v); inp.value=""; draw(); if(onChange)onChange(); }
+  addb.addEventListener("click",doAdd);
+  inp.addEventListener("keydown",function(e){ if(e.key==="Enter"){ e.preventDefault(); doAdd(); } });
+  addrow.appendChild(inp); addrow.appendChild(addb); box.appendChild(addrow);
+  var done=el("button","btn small primary tagpick-done","Done"); done.type="button"; done.addEventListener("click",close); box.appendChild(done);
+  function close(){ if(back.parentNode)back.parentNode.removeChild(back); document.removeEventListener("keydown",esc); }
+  function esc(e){ if(e.key==="Escape")close(); }
+  back.addEventListener("click",function(e){ if(e.target===back)close(); });
+  document.addEventListener("keydown",esc);
+  back.appendChild(box); document.body.appendChild(back); setTimeout(function(){try{inp.focus();}catch(e){}},30);
+}
+function renderGroTagSection(host){
+  host.appendChild(el("h3","prof-h","Categorize movements"));
+  host.appendChild(el("p","note","Tag each movement (Chest, Legs, Full body…). Tags show on the client's structured view and feed the weekly body-part tally. A movement can have more than one tag."));
+  GRO.data.categories=GRO.data.categories||{}; GRO.data.tagList=GRO.data.tagList||[];
+  var seen={};
+  (prog.cycles||[]).forEach(function(cy){(cy.days||[]).forEach(function(day){(day.exercises||[]).forEach(function(ex){
+    if(seen[ex.id]||!ex.name)return; seen[ex.id]=1;
+    var row=el("div","gro-tagrow");
+    var nm=el("span","gro-tagname",(ex.name||"").replace(/^\d+\/\d+\s+/,"")); row.appendChild(nm);
+    var chips=el("span","cattags"); row.appendChild(chips);
+    function drawChips(){ chips.textContent=""; coachTagsOf(ex.id).forEach(function(t){ chips.appendChild(el("span","cattag",t)); }); }
+    drawChips();
+    var b=el("button","btn small","🏷 Tag"); b.type="button";
+    b.addEventListener("click",function(){ openCoachTagPicker(ex,drawChips); });
+    row.appendChild(b); host.appendChild(row);
+  }); }); });
+}
 function renderGrocery(){
   var host=$("tab-grocery"); host.textContent="";
   host.appendChild(el("p","note","This is what the client sees if they flip their program to the grocery-list view. They can tick things done, but only you set the non-negotiables and focus list here."));
   GRO.data.nonneg=GRO.data.nonneg||[]; GRO.data.workingOn=GRO.data.workingOn||[];
+  var tagHost=el("div"); host.appendChild(tagHost); renderGroTagSection(tagHost);
   host.appendChild(el("h3","prof-h","Currently working on"));
   var woHost=el("div"); host.appendChild(woHost); renderGroWorkingOn(woHost);
   host.appendChild(el("h3","prof-h","Non-negotiables"));

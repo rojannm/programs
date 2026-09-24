@@ -73,6 +73,8 @@ header.top .sub{color:var(--ink2);font-size:.95rem;margin:0}
   color:var(--accent);border-radius:999px;padding:8px 16px;cursor:pointer;box-shadow:var(--shadow)}
 .btn:active{transform:scale(.97)}
 .btn.quiet{color:var(--ink2);font-weight:500}
+.btn.small{font-size:.8rem;padding:6px 12px}
+.btn.primary{background:var(--green);color:#fff;border-color:var(--green)}
 .btn:disabled{opacity:.4;cursor:default}
 .searchwrap{position:relative;margin:2px 0 4px}
 #exSearch{width:100%;font:inherit;font-size:.92rem;color:var(--ink);background:var(--card);
@@ -161,6 +163,16 @@ details.exercise.overdue > summary h3{color:var(--danger)}
 .daytag-flat{flex:0 0 auto;font-size:.6rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink2);background:var(--bg2);border:1px solid var(--hair);border-radius:999px;padding:2px 7px}
 .swaptag{flex:0 0 auto;font-size:.58rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--demo);background:var(--demo-soft);border-radius:999px;padding:2px 7px;cursor:pointer}
 .cattag{flex:0 0 auto;font-size:.58rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--green);background:var(--inset);border:1px solid var(--hair);border-radius:999px;padding:2px 7px}
+.cattags{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center}
+.tagpick-back{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px}
+.tagpick{background:var(--card);border:1px solid var(--hair);border-radius:16px;padding:16px;width:min(420px,100%);max-height:80vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.3)}
+.tagpick-h{font-family:"Fraunces",Georgia,serif;font-size:1.05rem;margin:0 0 12px;color:var(--ink)}
+.tagpick-chips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px}
+.tagchip{font-size:.8rem;font-weight:600;color:var(--ink2);background:var(--inset);border:1px solid var(--hair);border-radius:999px;padding:5px 12px;cursor:pointer}
+.tagchip.on{color:#fff;background:var(--green);border-color:var(--green)}
+.tagpick-add{display:flex;gap:8px;margin-bottom:14px}
+.tagpick-inp{flex:1;font-size:.9rem;padding:7px 10px;border:1px solid var(--hair);border-radius:9px;background:var(--bg2);color:var(--ink)}
+.tagpick-done{width:100%}
 .cat-tally{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 0 12px;padding:8px 10px;background:var(--inset);border:1px solid var(--hair);border-radius:10px}
 .ct-lbl{font-size:.62rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink2)}
 .ct-chip{font-size:.72rem;font-weight:700;color:var(--green);background:var(--card);border:1px solid var(--hair);border-radius:999px;padding:2px 9px}
@@ -1015,7 +1027,7 @@ function build(){
         }
         var ss=supersetTag(ex.name||"");
         if(ss)esum.appendChild(el("span","sstag",ss));
-        if(categoryOf(ex.id))esum.appendChild(el("span","cattag",categoryOf(ex.id)));
+        tagsOf(ex.id).forEach(function(t){ esum.appendChild(el("span","cattag",t)); });
         if(ex.demo)esum.appendChild(el("span","demotag","demo with Rojan"));
         if(ex.hl)esum.appendChild(el("span","coachtag","from Rojan"));
         var swp=el("button","swapbtn","⇄"); swp.type="button"; swp.title="Swap for a different version";
@@ -1466,8 +1478,15 @@ function renderExerciseFlat(ex){
     var pen=el("button","penbtn","✎"); pen.type="button"; pen.title="Rename this exercise";
     pen.addEventListener("click",function(e){ e.preventDefault(); e.stopPropagation(); startRename(h3,ex); });
     esum.appendChild(pen);
-    var catb=el("button","penbtn","🏷"); catb.type="button"; catb.title="Set category (Chest, Legs, Full body…)";
-    catb.addEventListener("click",function(e){ e.preventDefault(); e.stopPropagation(); var c=prompt("Category for this movement (e.g. Chest, Legs, Full body). Leave blank to clear:", categoryOf(ex.id)); if(c!==null){ setCategory(ex.id,c); build(); } });
+  }
+  /* tag markers + picker: only on rojan's own program (NATIVE_FLAT) */
+  var tagRow=el("span","cattags");
+  function drawTagRow(){ tagRow.textContent=""; tagsOf(ex.id).forEach(function(t){ tagRow.appendChild(el("span","cattag",t)); }); }
+  drawTagRow();
+  esum.appendChild(tagRow);
+  if(NATIVE_FLAT){
+    var catb=el("button","penbtn","🏷"); catb.type="button"; catb.title="Tags (Chest, Legs, Full body…)";
+    catb.addEventListener("click",function(e){ e.preventDefault(); e.stopPropagation(); openTagPicker(ex,catb,function(){ drawTagRow(); updateCatTally(); },function(){ build(); }); });
     esum.appendChild(catb);
   }
   var flag=el("button","flagbtn"+(isFlagged(ex.id)?" on":""),"⚑"); flag.type="button"; flag.title="Flag for this week (clears Monday)";
@@ -1581,19 +1600,65 @@ function updateOverdue(){
 function flatSortKey(name){ return (name||"").replace(/^\d+\/\d+\s+/,"").toLowerCase().trim(); }
 function flatDisplayName(name,id){ var sw=id&&FLAT.swaps&&FLAT.swaps[id]; var n=(sw&&sw.to)||(id&&FLAT.renames&&FLAT.renames[id])||name||""; return n.replace(/^\d+\/\d+\s+/,""); }
 /* ---- flat overlay: her own edits (non-negotiable tags, working-on list, renames, swaps) ---- */
-var FLAT={nonneg:[],workingOn:[],renames:{},mode:"structured",flagged:[],flagWeek:null,swaps:{},categories:{}};
-function categoryOf(id){ return (FLAT.categories&&FLAT.categories[id])||""; }
-function setCategory(id,cat){ FLAT.categories=FLAT.categories||{}; cat=(cat||"").trim(); if(!cat) delete FLAT.categories[id]; else FLAT.categories[id]=cat; saveFlatSoon(); }
+var FLAT={nonneg:[],workingOn:[],renames:{},mode:"structured",flagged:[],flagWeek:null,swaps:{},categories:{},tagList:[]};
+/* categories[id] is an ARRAY of tags. Old data stored a single string; tagsOf migrates it. */
+function tagsOf(id){ var v=FLAT.categories&&FLAT.categories[id]; if(!v) return []; return Array.isArray(v)?v.slice():[v]; }
+function primaryTag(id){ return tagsOf(id)[0]||""; }
+function hasAnyTag(id){ return tagsOf(id).length>0; }
+function categoryOf(id){ return primaryTag(id); }   /* legacy callers want a display string */
+function setTags(id,arr){ FLAT.categories=FLAT.categories||{}; arr=(arr||[]).filter(Boolean); if(arr.length) FLAT.categories[id]=arr; else delete FLAT.categories[id]; saveFlatSoon(); }
+function toggleTag(id,t){ t=(t||"").trim(); if(!t) return; var arr=tagsOf(id); var i=arr.indexOf(t); if(i>=0)arr.splice(i,1); else arr.push(t); setTags(id,arr); }
+function addTagToList(t){ t=(t||"").trim(); if(!t) return false; FLAT.tagList=FLAT.tagList||[]; if(FLAT.tagList.indexOf(t)<0){ FLAT.tagList.push(t); saveFlatSoon(); return true; } return false; }
+function allTags(){
+  var s={}; (FLAT.tagList||[]).forEach(function(t){ if(t) s[t]=1; });
+  Object.keys(FLAT.categories||{}).forEach(function(id){ tagsOf(id).forEach(function(t){ if(t) s[t]=1; }); });
+  return Object.keys(s).sort(function(a,b){ return a.toLowerCase()<b.toLowerCase()?-1:1; });
+}
 var FLATLIST=[];
 function renderCatTally(host){
   if(!host) return; host.textContent="";
   var tally={};
-  FLATLIST.forEach(function(ex){ var c=categoryOf(ex.id); if(c && isDoneWeek(ex.id)) tally[c]=(tally[c]||0)+1; });
+  FLATLIST.forEach(function(ex){ if(isDoneWeek(ex.id)) tagsOf(ex.id).forEach(function(c){ tally[c]=(tally[c]||0)+1; }); });
   var tnames=Object.keys(tally).sort();
   var tw=el("div","cat-tally"); tw.appendChild(el("span","ct-lbl","This week"));
   if(!tnames.length){ tw.appendChild(el("span","ct-none","nothing hit yet")); }
   tnames.forEach(function(c){ tw.appendChild(el("span","ct-chip",c+" "+tally[c])); });
   host.appendChild(tw);
+}
+/* ---- tag picker popover (rojan's own program only) ---- */
+function openTagPicker(ex,anchor,onChange,onClose){
+  var back=el("div","tagpick-back");
+  var box=el("div","tagpick");
+  box.appendChild(el("div","tagpick-h","Tags for "+(flatDisplayName(ex.name,ex.id))));
+  var chips=el("div","tagpick-chips"); box.appendChild(chips);
+  function draw(){
+    chips.textContent="";
+    var tags=allTags();
+    if(!tags.length){ chips.appendChild(el("span","ct-none","No tags yet. Add one below.")); }
+    tags.forEach(function(t){
+      var on=tagsOf(ex.id).indexOf(t)>=0;
+      var c=el("button","tagchip"+(on?" on":""),t); c.type="button";
+      c.addEventListener("click",function(){ toggleTag(ex.id,t); draw(); if(onChange)onChange(); });
+      chips.appendChild(c);
+    });
+  }
+  draw();
+  var addrow=el("div","tagpick-add");
+  var inp=el("input"); inp.type="text"; inp.placeholder="Add new tag"; inp.className="tagpick-inp";
+  var addb=el("button","btn small","Add"); addb.type="button";
+  function doAdd(){ var v=(inp.value||"").trim(); if(!v) return; addTagToList(v); toggleTag(ex.id,v); inp.value=""; draw(); if(onChange)onChange(); }
+  addb.addEventListener("click",doAdd);
+  inp.addEventListener("keydown",function(e){ if(e.key==="Enter"){ e.preventDefault(); doAdd(); } });
+  addrow.appendChild(inp); addrow.appendChild(addb); box.appendChild(addrow);
+  var done=el("button","btn small primary tagpick-done","Done"); done.type="button";
+  done.addEventListener("click",function(){ close(); });
+  box.appendChild(done);
+  function close(){ if(back.parentNode) back.parentNode.removeChild(back); document.removeEventListener("keydown",esc); if(onClose)onClose(); }
+  function esc(e){ if(e.key==="Escape") close(); }
+  back.addEventListener("click",function(e){ if(e.target===back) close(); });
+  document.addEventListener("keydown",esc);
+  back.appendChild(box); document.body.appendChild(back);
+  setTimeout(function(){ try{ inp.focus(); }catch(e){} },30);
 }
 function updateCatTally(){ renderCatTally(document.getElementById("catTallyHost")); }
 function isSwapped(id){ return FLAT.swaps && FLAT.swaps[id]; }
@@ -1623,7 +1688,7 @@ async function fetchFlatOverlay(){
   try{
     var r=await fetch(sbUrl("/rest/v1/client_flat?client_slug=eq."+encodeURIComponent(SLUG)+"&select=data"),{headers:sbHeaders()});
     if(!r.ok) return; var a=await r.json();
-    if(a.length){ var d={}; try{ d=JSON.parse(a[0].data||"{}"); }catch(e){} FLAT.nonneg=d.nonneg||[]; FLAT.workingOn=d.workingOn||[]; FLAT.renames=d.renames||{}; FLAT.mode=d.mode||"structured"; FLAT.flagged=d.flagged||[]; FLAT.flagWeek=d.flagWeek||null; FLAT.swaps=d.swaps||{}; FLAT.categories=d.categories||{}; }
+    if(a.length){ var d={}; try{ d=JSON.parse(a[0].data||"{}"); }catch(e){} FLAT.nonneg=d.nonneg||[]; FLAT.workingOn=d.workingOn||[]; FLAT.renames=d.renames||{}; FLAT.mode=d.mode||"structured"; FLAT.flagged=d.flagged||[]; FLAT.flagWeek=d.flagWeek||null; FLAT.swaps=d.swaps||{}; FLAT.categories=d.categories||{}; FLAT.tagList=d.tagList||[]; }
   }catch(e){}
 }
 function saveFlatSoon(){ clearTimeout(flatTimer); flatTimer=setTimeout(saveFlat,700); }
@@ -1631,7 +1696,7 @@ function saveFlat(){
   if(!cloudEnabled()) return;
   fetch(sbUrl("/rest/v1/client_flat?on_conflict=client_slug"),{
     method:"POST",headers:sbHeaders({"Prefer":"resolution=merge-duplicates,return=minimal"}),
-    body:JSON.stringify([{client_slug:SLUG,data:JSON.stringify({nonneg:FLAT.nonneg,workingOn:FLAT.workingOn,renames:FLAT.renames,mode:FLAT.mode,flagged:FLAT.flagged,flagWeek:FLAT.flagWeek,swaps:FLAT.swaps,categories:FLAT.categories}),updated_at:new Date().toISOString()}])
+    body:JSON.stringify([{client_slug:SLUG,data:JSON.stringify({nonneg:FLAT.nonneg,workingOn:FLAT.workingOn,renames:FLAT.renames,mode:FLAT.mode,flagged:FLAT.flagged,flagWeek:FLAT.flagWeek,swaps:FLAT.swaps,categories:FLAT.categories,tagList:FLAT.tagList}),updated_at:new Date().toISOString()}])
   }).catch(function(){});
 }
 function renderWorkingOn(host){
@@ -1776,7 +1841,7 @@ function buildFlat(content){
   content.appendChild(sess); trackOpen(sess,"sec:sessions");
 
   /* weekly tally by category, so she can see "chest 2, legs 1" at a glance */
-  var anyCat=list.some(function(ex){ return categoryOf(ex.id); });
+  var anyCat=list.some(function(ex){ return hasAnyTag(ex.id); });
   if(anyCat){
     FLATLIST=list; var th=el("div"); th.id="catTallyHost"; content.appendChild(th); renderCatTally(th);
   }
@@ -1840,7 +1905,7 @@ document.getElementById("expandAll").addEventListener("click",function(){
   document.querySelectorAll("details").forEach(function(d){d.open=true;});
 });
 document.getElementById("collapseAll").addEventListener("click",function(){
-  document.querySelectorAll("details.day, details.exercise, details.section").forEach(function(d){d.open=false;});
+  document.querySelectorAll("details.day, details.exercise, details.section, details.catgroup").forEach(function(d){d.open=false;});
 });
 document.getElementById("undoBtn").addEventListener("click",doUndo);
 document.getElementById("redoBtn").addEventListener("click",doRedo);
