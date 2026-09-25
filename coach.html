@@ -188,6 +188,11 @@ tr.chipbar td{background:var(--bg2);padding:6px 10px}
 .tagpick-inp{flex:1;font-size:.9rem;padding:7px 10px;border:1px solid var(--hair);border-radius:9px;background:var(--bg2);color:var(--ink)}
 .tagpick-done{width:100%;margin:0}
 .tagpick-sub-h{font-size:.7rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);margin:2px 0 8px}
+.tagpick-manage{margin:2px 0 12px}
+.tagpick-manage>summary{cursor:pointer;font-size:.8rem;color:var(--ink2);list-style:none}
+.tagpick-manage>summary::-webkit-details-marker{display:none}
+.tagmanage-row{display:flex;align-items:center;gap:6px;margin-top:8px}
+.tagmanage-name{flex:1;font-size:.86rem;color:var(--ink)}
 .tagchip.sub.on{background:var(--ink2);border-color:var(--ink2)}
 .cat-tally{display:flex;flex-direction:column;gap:8px;margin:0 0 12px;padding:10px 12px;background:var(--inset);border:1px solid var(--hair);border-radius:10px}
 .ct-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
@@ -799,7 +804,7 @@ function renderProgramEditor(){
             mv.appendChild(op);
           });
         });
-        mv.style.width="auto";
+        mv.style.maxWidth="140px";
         mv.addEventListener("change",function(){
           if(!mv.value)return;
           pushCoachHistory();
@@ -850,8 +855,8 @@ function renderProgramEditor(){
         trow.appendChild(addT);
         var comb=document.createElement("select");
         var c0=document.createElement("option"); c0.textContent="Combine in…"; c0.value=""; comb.appendChild(c0);
-        prog.cycles.forEach(function(cy2,c2){ cy2.days.forEach(function(d2,dd2){ (d2.exercises||[]).forEach(function(e2,ei2){ if(c2===cyi&&dd2===di&&ei2===exi)return; if(!e2.name)return; var op=document.createElement("option"); op.value=c2+":"+dd2+":"+ei2; op.textContent=e2.name+"  ("+(cy2.label||"")+"/"+(d2.title||d2.id)+")"; comb.appendChild(op); }); }); });
-        comb.style.width="auto";
+        prog.cycles.forEach(function(cy2,c2){ cy2.days.forEach(function(d2,dd2){ (d2.exercises||[]).forEach(function(e2,ei2){ if(c2===cyi&&dd2===di&&ei2===exi)return; if(!e2.name)return; var op=document.createElement("option"); op.value=c2+":"+dd2+":"+ei2; op.textContent=e2.name+" · "+(d2.title||d2.id); comb.appendChild(op); }); }); });
+        comb.style.maxWidth="150px";
         comb.addEventListener("change",function(){ if(!comb.value)return; var p=comb.value.split(":"); var srcName=prog.cycles[p[0]].days[p[1]].exercises[p[2]].name; if(!confirm("Combine \""+srcName+"\" into \""+ex.name+"\"? It becomes a titled table under this movement and its history carries over. The separate \""+srcName+"\" is removed.")){ comb.value=""; return; } pushCoachHistory(); combineInto(ex, +p[0], +p[1], +p[2]); saveProgramSoon(); renderProgramEditor(); toast("Combined. Both tables kept."); });
         trow.appendChild(comb);
         main.appendChild(trow);
@@ -974,6 +979,7 @@ async function loadLogs(){
   var host=$("tab-logs"); host.textContent="Loading…";
   await loadMeta();
   GRO.data=await fetchClientFlat(currentSlug); ensureSwapWeekCoach();   /* client overlay: swaps show/edit here too */
+  await fetchTagMap(); applyTagMapToClient();
   var r=await fetch(url("/rest/v1/log_entries?client_slug=eq."+esc(currentSlug)+
     "&select=*&order=exercise_id.asc,row_index.asc"),{headers:headers()});
   if(!r.ok){ host.textContent="Could not load logs."; return; }
@@ -1425,9 +1431,54 @@ async function fetchClientFlat(slug){
     try{ return JSON.parse(a[0].data||"{}"); }catch(e){ return {}; }
   }catch(e){ return {}; }
 }
+/* ---- shared tag library: learn movement->tags by name, apply across every program ---- */
+var TAGMAP={map:{},subs:{},tagList:[],subList:[]};
+function uniqC(a){ return (a||[]).filter(function(t,i){ return t && a.indexOf(t)===i; }); }
+function normName(n){ return (""+(n||"")).replace(/^\d+\/\d+\s+/,"").trim().toLowerCase(); }
+async function fetchTagMap(){
+  try{
+    var r=await fetch(url("/rest/v1/client_flat?client_slug=eq._tagmap&select=data"),{headers:headers()});
+    if(!r.ok) return; var a=await r.json(); if(!a.length) return;
+    var d={}; try{ d=JSON.parse(a[0].data||"{}"); }catch(e){}
+    TAGMAP.map=d.map||{}; TAGMAP.subs=d.subs||{}; TAGMAP.tagList=d.tagList||[]; TAGMAP.subList=d.subList||[];
+  }catch(e){}
+}
+var tagMapTimer=null;
+function saveTagMapSoon(){ clearTimeout(tagMapTimer); tagMapTimer=setTimeout(saveTagMap,600); }
+async function saveTagMap(){
+  try{ await fetch(url("/rest/v1/client_flat?on_conflict=client_slug"),{method:"POST",
+    headers:headers({"Prefer":"resolution=merge-duplicates,return=minimal"}),
+    body:JSON.stringify([{client_slug:"_tagmap",data:JSON.stringify(TAGMAP),updated_at:new Date().toISOString()}])}); }catch(e){}
+}
+function learnMovement(ex){
+  var k=normName(ex.name); if(!k) return;
+  var tags=coachTagsOf(ex.id), subs=coachSubsOf(ex.id);
+  if(tags.length) TAGMAP.map[k]=tags.slice(); else delete TAGMAP.map[k];
+  if(subs.length) TAGMAP.subs[k]=subs.slice(); else delete TAGMAP.subs[k];
+  TAGMAP.tagList=uniqC((TAGMAP.tagList||[]).concat(tags));
+  TAGMAP.subList=uniqC((TAGMAP.subList||[]).concat(subs));
+  saveTagMapSoon();
+}
+function learnWholeProgram(){
+  var seen={};
+  (prog.cycles||[]).forEach(function(cy){(cy.days||[]).forEach(function(day){(day.exercises||[]).forEach(function(ex){
+    if(seen[ex.id]||!ex.name)return; seen[ex.id]=1; if(coachTagsOf(ex.id).length||coachSubsOf(ex.id).length) learnMovement(ex);
+  });});});
+}
+function applyTagMapToClient(){
+  var changed=false, seen={};
+  (prog.cycles||[]).forEach(function(cy){(cy.days||[]).forEach(function(day){(day.exercises||[]).forEach(function(ex){
+    if(seen[ex.id]||!ex.name)return; seen[ex.id]=1; var k=normName(ex.name); if(!k)return;
+    if(TAGMAP.map[k] && !coachTagsOf(ex.id).length){ GRO.data.categories=GRO.data.categories||{}; GRO.data.categories[ex.id]=TAGMAP.map[k].slice(); changed=true; }
+    if(TAGMAP.subs[k] && !coachSubsOf(ex.id).length){ GRO.data.subcats=GRO.data.subcats||{}; GRO.data.subcats[ex.id]=TAGMAP.subs[k].slice(); changed=true; }
+  });});});
+  if(changed) saveGrocerySoon();
+  return changed;
+}
 async function loadGrocery(){
   var host=$("tab-grocery"); host.textContent="Loading…";
   GRO.data=await fetchClientFlat(currentSlug); ensureSwapWeekCoach();
+  await fetchTagMap(); applyTagMapToClient();
   renderGrocery();
 }
 function saveGrocerySoon(){ clearTimeout(groTimer); groTimer=setTimeout(saveGrocery,600); }
@@ -1458,30 +1509,45 @@ function coachTagsOf(id){ var v=GRO.data&&GRO.data.categories&&GRO.data.categori
 function coachSetTags(id,arr){ GRO.data.categories=GRO.data.categories||{}; arr=(arr||[]).filter(Boolean); if(arr.length)GRO.data.categories[id]=arr; else delete GRO.data.categories[id]; saveGrocerySoon(); }
 function coachToggleTag(id,t){ t=(t||"").trim(); if(!t)return; var a=coachTagsOf(id); var i=a.indexOf(t); if(i>=0)a.splice(i,1); else a.push(t); coachSetTags(id,a); }
 function coachAddTag(t){ t=(t||"").trim(); if(!t)return; GRO.data.tagList=GRO.data.tagList||[]; if(GRO.data.tagList.indexOf(t)<0){ GRO.data.tagList.push(t); saveGrocerySoon(); } }
-function coachAllTags(){ var s={}; (GRO.data.tagList||[]).forEach(function(t){if(t)s[t]=1;}); Object.keys(GRO.data.categories||{}).forEach(function(id){ coachTagsOf(id).forEach(function(t){if(t)s[t]=1;}); }); return Object.keys(s).sort(function(a,b){return a.toLowerCase()<b.toLowerCase()?-1:1;}); }
+function coachAllTags(){ var s={}; (GRO.data.tagList||[]).forEach(function(t){if(t)s[t]=1;}); (TAGMAP.tagList||[]).forEach(function(t){if(t)s[t]=1;}); Object.keys(GRO.data.categories||{}).forEach(function(id){ coachTagsOf(id).forEach(function(t){if(t)s[t]=1;}); }); return Object.keys(s).sort(function(a,b){return a.toLowerCase()<b.toLowerCase()?-1:1;}); }
 function coachSubsOf(id){ var v=GRO.data&&GRO.data.subcats&&GRO.data.subcats[id]; if(!v)return[]; return Array.isArray(v)?v.slice():[v]; }
 function coachSetSubs(id,arr){ GRO.data.subcats=GRO.data.subcats||{}; arr=(arr||[]).filter(Boolean); if(arr.length)GRO.data.subcats[id]=arr; else delete GRO.data.subcats[id]; saveGrocerySoon(); }
 function coachToggleSub(id,t){ t=(t||"").trim(); if(!t)return; var a=coachSubsOf(id); var i=a.indexOf(t); if(i>=0)a.splice(i,1); else a.push(t); coachSetSubs(id,a); }
 function coachAddSub(t){ t=(t||"").trim(); if(!t)return; GRO.data.subList=GRO.data.subList||[]; if(GRO.data.subList.indexOf(t)<0){ GRO.data.subList.push(t); saveGrocerySoon(); } }
-function coachAllSubs(){ var s={}; (GRO.data.subList||[]).forEach(function(t){if(t)s[t]=1;}); Object.keys(GRO.data.subcats||{}).forEach(function(id){ coachSubsOf(id).forEach(function(t){if(t)s[t]=1;}); }); return Object.keys(s).sort(function(a,b){return a.toLowerCase()<b.toLowerCase()?-1:1;}); }
+function coachAllSubs(){ var s={}; (GRO.data.subList||[]).forEach(function(t){if(t)s[t]=1;}); (TAGMAP.subList||[]).forEach(function(t){if(t)s[t]=1;}); Object.keys(GRO.data.subcats||{}).forEach(function(id){ coachSubsOf(id).forEach(function(t){if(t)s[t]=1;}); }); return Object.keys(s).sort(function(a,b){return a.toLowerCase()<b.toLowerCase()?-1:1;}); }
+function coachRenameTag(o,n){ o=(o||"").trim(); n=(n||"").trim(); if(!o||!n||o===n)return;
+  GRO.data.tagList=uniqC((GRO.data.tagList||[]).map(function(t){return t===o?n:t;}));
+  Object.keys(GRO.data.categories||{}).forEach(function(id){ GRO.data.categories[id]=uniqC(coachTagsOf(id).map(function(t){return t===o?n:t;})); });
+  TAGMAP.tagList=uniqC((TAGMAP.tagList||[]).map(function(t){return t===o?n:t;}));
+  Object.keys(TAGMAP.map||{}).forEach(function(k){ TAGMAP.map[k]=uniqC((TAGMAP.map[k]||[]).map(function(t){return t===o?n:t;})); });
+  saveGrocerySoon(); saveTagMapSoon();
+}
+function coachDeleteTag(name){ name=(name||"").trim(); if(!name)return;
+  GRO.data.tagList=(GRO.data.tagList||[]).filter(function(t){return t!==name;});
+  Object.keys(GRO.data.categories||{}).forEach(function(id){ var a=coachTagsOf(id).filter(function(t){return t!==name;}); if(a.length)GRO.data.categories[id]=a; else delete GRO.data.categories[id]; });
+  TAGMAP.tagList=(TAGMAP.tagList||[]).filter(function(t){return t!==name;});
+  Object.keys(TAGMAP.map||{}).forEach(function(k){ var a=(TAGMAP.map[k]||[]).filter(function(t){return t!==name;}); if(a.length)TAGMAP.map[k]=a; else delete TAGMAP.map[k]; });
+  saveGrocerySoon(); saveTagMapSoon();
+}
 /* placement: structured (required) vs grocery pool (extra/optional) */
 function coachIsExtra(id){ return GRO.data.extras && GRO.data.extras.indexOf(id)>=0; }
 function coachToggleExtra(id){ GRO.data.extras=GRO.data.extras||[]; var i=GRO.data.extras.indexOf(id); if(i>=0)GRO.data.extras.splice(i,1); else GRO.data.extras.push(id); saveGrocerySoon(); }
 function openCoachTagPicker(ex,onChange){
   var back=el("div","tagpick-back"); var box=el("div","tagpick");
+  function chg(){ learnMovement(ex); if(onChange)onChange(); }   /* remember movement->tags in the shared library */
   box.appendChild(el("div","tagpick-h","Tags for "+(ex.name||"").replace(/^\d+\/\d+\s+/,"")));
   var chips=el("div","tagpick-chips"); box.appendChild(chips);
   function draw(){ chips.textContent="";
     var tags=coachAllTags();
     if(!tags.length) chips.appendChild(el("span","note","No tags yet. Add one below."));
     tags.forEach(function(t){ var on=coachTagsOf(ex.id).indexOf(t)>=0; var c=el("button","tagchip"+(on?" on":""),t); c.type="button";
-      c.addEventListener("click",function(){ coachToggleTag(ex.id,t); draw(); if(onChange)onChange(); }); chips.appendChild(c); });
+      c.addEventListener("click",function(){ coachToggleTag(ex.id,t); draw(); chg(); }); chips.appendChild(c); });
   }
   draw();
   var addrow=el("div","tagpick-add");
   var inp=document.createElement("input"); inp.type="text"; inp.placeholder="Add new tag"; inp.className="tagpick-inp";
   var addb=el("button","btn small","Add"); addb.type="button";
-  function doAdd(){ var v=(inp.value||"").trim(); if(!v)return; coachAddTag(v); coachToggleTag(ex.id,v); inp.value=""; draw(); if(onChange)onChange(); }
+  function doAdd(){ var v=(inp.value||"").trim(); if(!v)return; coachAddTag(v); coachToggleTag(ex.id,v); inp.value=""; draw(); drawManage(); chg(); }
   addb.addEventListener("click",doAdd);
   inp.addEventListener("keydown",function(e){ if(e.key==="Enter"){ e.preventDefault(); doAdd(); } });
   addrow.appendChild(inp); addrow.appendChild(addb); box.appendChild(addrow);
@@ -1490,16 +1556,31 @@ function openCoachTagPicker(ex,onChange){
   function drawSubs(){ subchips.textContent="";
     var subs=coachAllSubs(); if(!subs.length) subchips.appendChild(el("span","note","None yet."));
     subs.forEach(function(t){ var on=coachSubsOf(ex.id).indexOf(t)>=0; var c=el("button","tagchip sub"+(on?" on":""),t); c.type="button";
-      c.addEventListener("click",function(){ coachToggleSub(ex.id,t); drawSubs(); if(onChange)onChange(); }); subchips.appendChild(c); });
+      c.addEventListener("click",function(){ coachToggleSub(ex.id,t); drawSubs(); chg(); }); subchips.appendChild(c); });
   }
   drawSubs();
   var subrow=el("div","tagpick-add");
   var sinp=document.createElement("input"); sinp.type="text"; sinp.placeholder="Add sub-tag"; sinp.className="tagpick-inp";
   var saddb=el("button","btn small","Add"); saddb.type="button";
-  function doSubAdd(){ var v=(sinp.value||"").trim(); if(!v)return; coachAddSub(v); coachToggleSub(ex.id,v); sinp.value=""; drawSubs(); if(onChange)onChange(); }
+  function doSubAdd(){ var v=(sinp.value||"").trim(); if(!v)return; coachAddSub(v); coachToggleSub(ex.id,v); sinp.value=""; drawSubs(); chg(); }
   saddb.addEventListener("click",doSubAdd);
   sinp.addEventListener("keydown",function(e){ if(e.key==="Enter"){ e.preventDefault(); doSubAdd(); } });
   subrow.appendChild(sinp); subrow.appendChild(saddb); box.appendChild(subrow);
+  var mng=el("details","tagpick-manage"); var msum=el("summary",null,"Edit / delete tags"); mng.appendChild(msum);
+  var mbody=el("div"); mng.appendChild(mbody);
+  function drawManage(){ mbody.textContent="";
+    var tags=coachAllTags();
+    if(!tags.length){ mbody.appendChild(el("span","note","No tags yet.")); return; }
+    tags.forEach(function(t){
+      var row=el("div","tagmanage-row"); row.appendChild(el("span","tagmanage-name",t));
+      var ren=el("button","btn small","Rename"); ren.type="button";
+      ren.addEventListener("click",function(){ var nn=prompt("Rename tag \""+t+"\" to:",t); if(nn===null)return; coachRenameTag(t,nn); draw(); drawManage(); chg(); });
+      var del=el("button","btn small danger","Delete"); del.type="button";
+      del.addEventListener("click",function(){ if(!confirm("Delete the tag \""+t+"\" from this client and from your shared library?"))return; coachDeleteTag(t); draw(); drawManage(); if(onChange)onChange(); });
+      row.appendChild(ren); row.appendChild(del); mbody.appendChild(row);
+    });
+  }
+  drawManage(); box.appendChild(mng);
   var done=el("button","btn small primary tagpick-done","Done"); done.type="button"; done.addEventListener("click",close); box.appendChild(done);
   function close(){ if(back.parentNode)back.parentNode.removeChild(back); document.removeEventListener("keydown",esc); }
   function esc(e){ if(e.key==="Escape")close(); }
@@ -1510,7 +1591,14 @@ function openCoachTagPicker(ex,onChange){
 function renderGroTagSection(host){
   host.appendChild(el("h3","prof-h","Movements: tags & placement"));
   host.appendChild(el("p","note","Tag each movement (Chest, Legs…) and set where it lives. Structured = the required 'needs to hit' program. Extra = the optional grocery pool the client only sees when they flip to the Extras view. Extras don't trigger overdue nags or count in the required tally."));
+  host.appendChild(el("p","note","Tags you set are remembered by movement name in your shared library and auto-applied to every client (and future programs) with the same movement, on any untagged one. Opening a client applies them automatically."));
   GRO.data.categories=GRO.data.categories||{}; GRO.data.tagList=GRO.data.tagList||[]; GRO.data.extras=GRO.data.extras||[];
+  var libbar=el("div"); libbar.style.cssText="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px";
+  var learnB=el("button","btn small","Save this program's tags to library"); learnB.type="button";
+  learnB.addEventListener("click",function(){ learnWholeProgram(); toast("Saved to your shared library."); });
+  var applyB=el("button","btn small","Apply library to this client"); applyB.type="button";
+  applyB.addEventListener("click",function(){ var ch=applyTagMapToClient(); renderGrocery(); toast(ch?"Applied library tags.":"Nothing new to apply."); });
+  libbar.appendChild(learnB); libbar.appendChild(applyB); host.appendChild(libbar);
   var seen={};
   (prog.cycles||[]).forEach(function(cy){(cy.days||[]).forEach(function(day){(day.exercises||[]).forEach(function(ex){
     if(seen[ex.id]||!ex.name)return; seen[ex.id]=1;

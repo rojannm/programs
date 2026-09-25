@@ -174,6 +174,11 @@ details.exercise.overdue > summary h3{color:var(--danger)}
 .tagpick-inp{flex:1;font-size:.9rem;padding:7px 10px;border:1px solid var(--hair);border-radius:9px;background:var(--bg2);color:var(--ink)}
 .tagpick-done{width:100%}
 .tagpick-sub-h{font-size:.7rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);margin:2px 0 8px}
+.tagpick-manage{margin:2px 0 12px}
+.tagpick-manage>summary{cursor:pointer;font-size:.8rem;color:var(--ink2);list-style:none}
+.tagpick-manage>summary::-webkit-details-marker{display:none}
+.tagmanage-row{display:flex;align-items:center;gap:6px;margin-top:8px}
+.tagmanage-name{flex:1;font-size:.86rem;color:var(--ink)}
 .tagchip.sub.on{background:var(--ink2);border-color:var(--ink2)}
 .cat-tally{display:flex;flex-direction:column;gap:8px;margin:0 0 4px;padding:10px 12px;background:var(--inset);border:1px solid var(--hair);border-radius:10px}
 .ct-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
@@ -1673,6 +1678,17 @@ function allTags(){
   Object.keys(FLAT.categories||{}).forEach(function(id){ tagsOf(id).forEach(function(t){ if(t) s[t]=1; }); });
   return Object.keys(s).sort(function(a,b){ return a.toLowerCase()<b.toLowerCase()?-1:1; });
 }
+function uniq(a){ return a.filter(function(t,i){ return a.indexOf(t)===i; }); }
+function renameTag(oldN,newN){ oldN=(oldN||"").trim(); newN=(newN||"").trim(); if(!oldN||!newN||oldN===newN) return;
+  FLAT.tagList=uniq((FLAT.tagList||[]).map(function(t){ return t===oldN?newN:t; }));
+  Object.keys(FLAT.categories||{}).forEach(function(id){ FLAT.categories[id]=uniq(tagsOf(id).map(function(t){ return t===oldN?newN:t; })); });
+  saveFlatSoon();
+}
+function deleteTag(name){ name=(name||"").trim(); if(!name) return;
+  FLAT.tagList=(FLAT.tagList||[]).filter(function(t){ return t!==name; });
+  Object.keys(FLAT.categories||{}).forEach(function(id){ var a=tagsOf(id).filter(function(t){ return t!==name; }); if(a.length) FLAT.categories[id]=a; else delete FLAT.categories[id]; });
+  saveFlatSoon();
+}
 /* sub-tags (bi, uni, cable…): a second freeform dimension, nested under a movement's categories in the report */
 function subsOf(id){ var v=FLAT.subcats&&FLAT.subcats[id]; if(!v) return []; return Array.isArray(v)?v.slice():[v]; }
 function setSubs(id,arr){ FLAT.subcats=FLAT.subcats||{}; arr=(arr||[]).filter(Boolean); if(arr.length) FLAT.subcats[id]=arr; else delete FLAT.subcats[id]; saveFlatSoon(); }
@@ -1755,6 +1771,21 @@ function openTagPicker(ex,anchor,onChange,onClose){
   saddb.addEventListener("click",doSubAdd);
   sinp.addEventListener("keydown",function(e){ if(e.key==="Enter"){ e.preventDefault(); doSubAdd(); } });
   subrow.appendChild(sinp); subrow.appendChild(saddb); box.appendChild(subrow);
+  var mng=el("details","tagpick-manage"); var msum=el("summary",null,"Edit / delete tags"); mng.appendChild(msum);
+  var mbody=el("div"); mng.appendChild(mbody);
+  function drawManage(){ mbody.textContent="";
+    allTags().forEach(function(t){
+      var row=el("div","tagmanage-row"); row.appendChild(el("span","tagmanage-name",t));
+      var ren=el("button","btn small","Rename"); ren.type="button";
+      ren.addEventListener("click",function(){ var nn=prompt("Rename tag \""+t+"\" to:",t); if(nn===null)return; renameTag(t,nn); draw(); drawManage(); if(onChange)onChange(); });
+      var del=el("button","btn small danger","Delete"); del.type="button";
+      del.addEventListener("click",function(){ if(!confirm("Delete the tag \""+t+"\" from your list and from every movement?"))return; deleteTag(t); draw(); drawManage(); if(onChange)onChange(); });
+      row.appendChild(ren); row.appendChild(del); mbody.appendChild(row);
+    });
+    if(!allTags().length) mbody.appendChild(el("span","ct-none","No tags yet."));
+  }
+  drawManage();
+  box.appendChild(mng);
   var done=el("button","btn small primary tagpick-done","Done"); done.type="button";
   done.addEventListener("click",function(){ close(); });
   box.appendChild(done);
