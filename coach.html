@@ -487,6 +487,11 @@ function renderClients(){
     b.addEventListener("click",function(){ selectClient(c.client_slug); });
     host.appendChild(b);
   });
+  var syncRow=el("div"); syncRow.style.cssText="margin-top:10px";
+  var syncB=el("button","btn small","🔄 Sync tags across all clients"); syncB.type="button";
+  syncB.title="Learn from every program you've tagged, then fill in untagged movements everywhere. Existing tags are left alone.";
+  syncB.addEventListener("click",syncAllTags);
+  syncRow.appendChild(syncB); host.appendChild(syncRow);
 }
 
 /* ---------- select client / tabs ---------- */
@@ -1474,6 +1479,50 @@ function applyTagMapToClient(){
   });});});
   if(changed) saveGrocerySoon();
   return changed;
+}
+/* one-shot: learn from EVERY program already tagged, then fill untagged movements across all clients */
+async function syncAllTags(){
+  if(!confirm("Learn tags from every program you've already tagged (yours, Marek's, and the rest), then fill in the untagged movements across all clients?\n\nMovements you've already tagged are left exactly as they are. This only fills in blanks."))return;
+  toast("Syncing tags across all clients…");
+  try{
+    var pr=await fetch(url("/rest/v1/client_programs?select=client_slug,data"),{headers:headers()});
+    if(!pr.ok)throw 0; var programs=await pr.json();
+    var fr=await fetch(url("/rest/v1/client_flat?select=client_slug,data"),{headers:headers()});
+    var flats=fr.ok?await fr.json():[];
+    var progBySlug={}, flatBySlug={};
+    programs.forEach(function(p){ try{ progBySlug[p.client_slug]=JSON.parse(p.data||"{}"); }catch(e){ progBySlug[p.client_slug]={}; } });
+    flats.forEach(function(f){ if(f.client_slug==="_tagmap")return; try{ flatBySlug[f.client_slug]=JSON.parse(f.data||"{}"); }catch(e){ flatBySlug[f.client_slug]={}; } });
+    await fetchTagMap();   /* union onto any existing library */
+    function nameMap(pg){ var m={}; (pg.cycles||[]).forEach(function(cy){(cy.days||[]).forEach(function(day){(day.exercises||[]).forEach(function(ex){ m[ex.id]=ex.name; if(ex.variants)ex.variants.forEach(function(v){ m[v.id]=v.name; }); });});}); return m; }
+    /* LEARN: union tags/subs by movement name from every tagged overlay */
+    Object.keys(flatBySlug).forEach(function(slug){
+      var fl=flatBySlug[slug], pg=progBySlug[slug]; if(!pg)return; var nm=nameMap(pg);
+      var cats=fl.categories||{}, subs=fl.subcats||{};
+      Object.keys(cats).forEach(function(id){ var k=normName(nm[id]||""); if(!k)return; var arr=Array.isArray(cats[id])?cats[id]:[cats[id]]; if(!arr.length)return; TAGMAP.map[k]=uniqC((TAGMAP.map[k]||[]).concat(arr)); TAGMAP.tagList=uniqC(TAGMAP.tagList.concat(arr)); });
+      Object.keys(subs).forEach(function(id){ var k=normName(nm[id]||""); if(!k)return; var arr=Array.isArray(subs[id])?subs[id]:[subs[id]]; if(!arr.length)return; TAGMAP.subs[k]=uniqC((TAGMAP.subs[k]||[]).concat(arr)); TAGMAP.subList=uniqC(TAGMAP.subList.concat(arr)); });
+    });
+    /* APPLY: fill untagged movements in every client (create an overlay if none) */
+    var updates=[], taggedCount=0, clientCount=0;
+    Object.keys(progBySlug).forEach(function(slug){
+      if(slug==="_tagmap")return; var pg=progBySlug[slug]; var fl=flatBySlug[slug]||{};
+      fl.categories=fl.categories||{}; fl.subcats=fl.subcats||{};
+      var changed=false, seen={};
+      (pg.cycles||[]).forEach(function(cy){(cy.days||[]).forEach(function(day){(day.exercises||[]).forEach(function(ex){
+        if(seen[ex.id]||!ex.name)return; seen[ex.id]=1; var k=normName(ex.name); if(!k)return;
+        var cur=fl.categories[ex.id]; var hasTag=cur && (Array.isArray(cur)?cur.length:true);
+        if(TAGMAP.map[k] && !hasTag){ fl.categories[ex.id]=TAGMAP.map[k].slice(); changed=true; taggedCount++; }
+        var curs=fl.subcats[ex.id]; var hasSub=curs && (Array.isArray(curs)?curs.length:true);
+        if(TAGMAP.subs[k] && !hasSub){ fl.subcats[ex.id]=TAGMAP.subs[k].slice(); changed=true; }
+      });});});
+      if(changed){ flatBySlug[slug]=fl; updates.push({client_slug:slug,data:JSON.stringify(fl),updated_at:new Date().toISOString()}); clientCount++; }
+    });
+    await saveTagMap();
+    if(updates.length){ var wr=await fetch(url("/rest/v1/client_flat?on_conflict=client_slug"),{method:"POST",headers:headers({"Prefer":"resolution=merge-duplicates,return=minimal"}),body:JSON.stringify(updates)}); if(!wr.ok)throw new Error("write "+wr.status); }
+    if(currentSlug && flatBySlug[currentSlug]) GRO.data=flatBySlug[currentSlug];
+    var tabOn=document.querySelector(".tab.on"); var tn=tabOn?tabOn.dataset.tab:null;
+    if(tn==="grocery") renderGrocery(); else if(tn==="logs") renderLogsBody();
+    toast("Done. Tagged "+taggedCount+" movement"+(taggedCount===1?"":"s")+" across "+clientCount+" client"+(clientCount===1?"":"s")+".");
+  }catch(e){ toast("Sync failed. Nothing was changed."); }
 }
 async function loadGrocery(){
   var host=$("tab-grocery"); host.textContent="Loading…";
