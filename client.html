@@ -164,6 +164,11 @@ details.exercise.overdue > summary h3{color:var(--danger)}
 .swaptag{flex:0 0 auto;font-size:.58rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--demo);background:var(--demo-soft);border-radius:999px;padding:2px 7px;cursor:pointer}
 .cattag{flex:0 0 auto;font-size:.58rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--green);background:var(--inset);border:1px solid var(--hair);border-radius:999px;padding:2px 7px}
 .cattags{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center}
+.swaplog-row{display:flex;gap:10px;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--hair);font-size:.9rem}
+.swaplog-date{flex:0 0 auto;color:var(--ink2);font-variant-numeric:tabular-nums;min-width:52px}
+.swaplog-txt{flex:1;color:var(--ink)}
+.swaplog-kind{flex:0 0 auto;font-size:.58rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--green);background:var(--inset);border:1px solid var(--hair);border-radius:999px;padding:2px 7px}
+.swaplog-kind.wk{color:var(--demo)}
 .tagpick-back{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px}
 .tagpick{background:var(--card);border:1px solid var(--hair);border-radius:16px;padding:16px;width:min(420px,100%);max-height:80vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.3)}
 .tagpick-h{font-family:"Fraunces",Georgia,serif;font-size:1.05rem;margin:0 0 12px;color:var(--ink)}
@@ -960,6 +965,7 @@ function renderTable(ex,container){
 
 function build(){
   ensureSwapWeek();   /* drop any "just this week" swaps once Monday rolls over */
+  ensureSwapLog();    /* make sure existing swaps have a history line */
   document.title=(PROG.name||"Training")+" Training Program";
   document.getElementById("clientName").textContent=PROG.name||"Training Program";
   document.getElementById("clientSub").textContent=PROG.subtitle||"";
@@ -986,7 +992,7 @@ function build(){
     trackOpen(keys,"sec:keys");
   }
 
-  if(PROG.flat){ buildFlat(content); appendProgress(content); appendArchived(content); appendNutrition(content); appendDiscuss(content); return; }
+  if(PROG.flat){ buildFlat(content); appendProgress(content); appendArchived(content); appendSwapLog(content); appendNutrition(content); appendDiscuss(content); return; }
 
   content.appendChild(makeOverdueBanner());
   appendProgress(content);
@@ -1148,6 +1154,7 @@ function build(){
   })();
 
   appendArchived(content);
+  appendSwapLog(content);
   appendNutrition(content);
   appendDiscuss(content);
 }
@@ -1488,8 +1495,10 @@ function allFlatExercises(){
 function renderFlatTables(ex,host){
   host.textContent="";
   if(ex.variants && ex.variants.length){
+    var movName=flatDisplayName(ex.name,ex.id);
     ex.variants.forEach(function(v){
-      host.appendChild(el("p","tbl-label",v.name));
+      /* skip the label when it just repeats the movement's own name (the first/base table) */
+      if(v.name && v.name.trim().toLowerCase()!==(movName||"").trim().toLowerCase()) host.appendChild(el("p","tbl-label",v.name));
       var d=el("div"); host.appendChild(d);
       renderTable(v,d);
     });
@@ -1643,11 +1652,11 @@ function renderSessions(){
   if(cnt){ var ws=weekStartIso(); var n=dates.filter(function(d){return d>=ws;}).length; cnt.textContent=n+" this week"; }
 }
 function updateOverdue(){
-  if(hasExtras()){ showOverdueBanner(0,[]); return; }   /* grocery pool is optional: no nags */
   var cutoff=new Date(); cutoff.setDate(cutoff.getDate()-14);
   var cutIso=cutoff.getFullYear()+"-"+String(cutoff.getMonth()+1).padStart(2,"0")+"-"+String(cutoff.getDate()).padStart(2,"0");
   var n=0, items=[];
   Object.keys(flatNodes).forEach(function(id){
+    if(isExtra(id)) return;   /* extras are optional: no overdue nags */
     var ex=exIndex[id]; if(!ex) return;
     var last=lastActivityIso(ex);
     var od = last && last<cutIso && !skippedOverdue[id];
@@ -1660,7 +1669,7 @@ function updateOverdue(){
 function flatSortKey(name){ return (name||"").replace(/^\d+\/\d+\s+/,"").toLowerCase().trim(); }
 function flatDisplayName(name,id){ var sw=id&&FLAT.swaps&&FLAT.swaps[id]; var n=(sw&&sw.to)||(id&&FLAT.renames&&FLAT.renames[id])||name||""; return n.replace(/^\d+\/\d+\s+/,""); }
 /* ---- flat overlay: her own edits (non-negotiable tags, working-on list, renames, swaps) ---- */
-var FLAT={nonneg:[],workingOn:[],renames:{},mode:"structured",flagged:[],flagWeek:null,swaps:{},categories:{},tagList:[],subcats:{},subList:[],extras:[]};
+var FLAT={nonneg:[],workingOn:[],renames:{},mode:"structured",flagged:[],flagWeek:null,swaps:{},categories:{},tagList:[],subcats:{},subList:[],extras:[],swapLog:[]};
 /* extras = movements the coach moved to the grocery/vibes pool. Optional: hidden from the
    structured "needs" view and from overdue nags; they show only in the grocery view. */
 function isExtra(id){ return FLAT.extras && FLAT.extras.indexOf(id)>=0; }
@@ -1798,7 +1807,29 @@ function openTagPicker(ex,anchor,onChange,onClose){
 }
 function updateCatTally(){ renderCatTally(document.getElementById("catTallyHost")); }
 function isSwapped(id){ return FLAT.swaps && FLAT.swaps[id]; }
-function setSwap(id,to,from,temp){ FLAT.swaps=FLAT.swaps||{}; if(!to){ delete FLAT.swaps[id]; } else { FLAT.swaps[id]={to:to,from:from,week:temp?weekStartIso():null}; } saveFlatSoon(); }
+function setSwap(id,to,from,temp){ FLAT.swaps=FLAT.swaps||{}; if(!to){ delete FLAT.swaps[id]; } else { FLAT.swaps[id]={to:to,from:from,week:temp?weekStartIso():null}; logSwap(id,from,to,temp); } saveFlatSoon(); }
+function logSwap(id,from,to,temp){ FLAT.swapLog=FLAT.swapLog||[]; FLAT.swapLog.push({date:todayMD(),id:id,from:from||"",to:to,kind:temp?"week":"permanent"}); }
+/* backfill: give any already-active swap a history line if it doesn't have one yet */
+function ensureSwapLog(){ FLAT.swapLog=FLAT.swapLog||[]; var ch=false;
+  Object.keys(FLAT.swaps||{}).forEach(function(id){ var sw=FLAT.swaps[id]; if(!sw||!sw.to)return;
+    var seen=FLAT.swapLog.some(function(e){ return e.id===id && e.to===sw.to; });
+    if(!seen){ FLAT.swapLog.push({date:"",id:id,from:sw.from||"",to:sw.to,kind:sw.week?"week":"permanent",backfilled:true}); ch=true; }
+  });
+  if(ch) saveFlatSoon();
+}
+function appendSwapLog(content){
+  var log=(FLAT.swapLog||[]).slice(); if(!log.length) return;
+  var sec=el("details","section"); var sum=el("summary"); sum.appendChild(el("span","chev")); sum.appendChild(el("h2",null,"Swap history")); sec.appendChild(sum);
+  var body=el("div","section-body");
+  log.slice().reverse().forEach(function(e){
+    var row=el("div","swaplog-row");
+    row.appendChild(el("span","swaplog-date", e.date||"earlier"));
+    row.appendChild(el("span","swaplog-txt", (e.from||"?")+" → "+(e.to||"?")));
+    row.appendChild(el("span","swaplog-kind"+(e.kind==="week"?" wk":""), e.kind==="week"?"this week":"permanent"));
+    body.appendChild(row);
+  });
+  sec.appendChild(body); content.appendChild(sec); trackOpen(sec,"sec:swaplog");
+}
 function swapLabel(sw){ return (sw&&sw.week)?"swapped · this week":"swapped"; }
 function ensureSwapWeek(){ if(!FLAT.swaps) return; var w=weekStartIso(),ch=false; Object.keys(FLAT.swaps).forEach(function(id){ var s=FLAT.swaps[id]; if(s&&s.week&&s.week!==w){ delete FLAT.swaps[id]; ch=true; } }); if(ch) saveFlatSoon(); }
 var DAYOF={};   /* exId -> day label, for the grocery day tag */
@@ -1824,7 +1855,7 @@ async function fetchFlatOverlay(){
   try{
     var r=await fetch(sbUrl("/rest/v1/client_flat?client_slug=eq."+encodeURIComponent(SLUG)+"&select=data"),{headers:sbHeaders()});
     if(!r.ok) return; var a=await r.json();
-    if(a.length){ var d={}; try{ d=JSON.parse(a[0].data||"{}"); }catch(e){} FLAT.nonneg=d.nonneg||[]; FLAT.workingOn=d.workingOn||[]; FLAT.renames=d.renames||{}; FLAT.mode=d.mode||"structured"; FLAT.flagged=d.flagged||[]; FLAT.flagWeek=d.flagWeek||null; FLAT.swaps=d.swaps||{}; FLAT.categories=d.categories||{}; FLAT.tagList=d.tagList||[]; FLAT.subcats=d.subcats||{}; FLAT.subList=d.subList||[]; FLAT.extras=d.extras||[]; }
+    if(a.length){ var d={}; try{ d=JSON.parse(a[0].data||"{}"); }catch(e){} FLAT.nonneg=d.nonneg||[]; FLAT.workingOn=d.workingOn||[]; FLAT.renames=d.renames||{}; FLAT.mode=d.mode||"structured"; FLAT.flagged=d.flagged||[]; FLAT.flagWeek=d.flagWeek||null; FLAT.swaps=d.swaps||{}; FLAT.categories=d.categories||{}; FLAT.tagList=d.tagList||[]; FLAT.subcats=d.subcats||{}; FLAT.subList=d.subList||[]; FLAT.extras=d.extras||[]; FLAT.swapLog=d.swapLog||[]; }
   }catch(e){}
 }
 function saveFlatSoon(){ clearTimeout(flatTimer); flatTimer=setTimeout(saveFlat,700); }
@@ -1832,7 +1863,7 @@ function saveFlat(){
   if(!cloudEnabled()) return;
   fetch(sbUrl("/rest/v1/client_flat?on_conflict=client_slug"),{
     method:"POST",headers:sbHeaders({"Prefer":"resolution=merge-duplicates,return=minimal"}),
-    body:JSON.stringify([{client_slug:SLUG,data:JSON.stringify({nonneg:FLAT.nonneg,workingOn:FLAT.workingOn,renames:FLAT.renames,mode:FLAT.mode,flagged:FLAT.flagged,flagWeek:FLAT.flagWeek,swaps:FLAT.swaps,categories:FLAT.categories,tagList:FLAT.tagList,subcats:FLAT.subcats,subList:FLAT.subList,extras:FLAT.extras}),updated_at:new Date().toISOString()}])
+    body:JSON.stringify([{client_slug:SLUG,data:JSON.stringify({nonneg:FLAT.nonneg,workingOn:FLAT.workingOn,renames:FLAT.renames,mode:FLAT.mode,flagged:FLAT.flagged,flagWeek:FLAT.flagWeek,swaps:FLAT.swaps,categories:FLAT.categories,tagList:FLAT.tagList,subcats:FLAT.subcats,subList:FLAT.subList,extras:FLAT.extras,swapLog:FLAT.swapLog}),updated_at:new Date().toISOString()}])
   }).catch(function(){});
 }
 function renderWorkingOn(host){
@@ -1919,8 +1950,7 @@ function modeToggle(){
   var wrap=el("div","modetoggle");
   wrap.appendChild(el("span","mt-lbl","View"));
   var seg=el("div","mt-seg");
-  var groLabel=hasExtras()?"Extras":"Grocery list";
-  [["structured","Structured"],["grocery",groLabel]].forEach(function(m){
+  [["structured","Structured"],["grocery","Grocery list"]].forEach(function(m){
     var b=el("button","mt-btn"+(FLAT.mode===m[0]?" on":""),m[1]); b.type="button";
     b.addEventListener("click",function(){ if(FLAT.mode!==m[0]) switchMode(m[0]); });
     seg.appendChild(b);
@@ -1946,8 +1976,7 @@ function buildFlat(content){
     if(!cur || (liveIds[ex.id] && !liveIds[cur.id])) byName[k]=ex;
   });
   list=Object.keys(byName).map(function(k){ return byName[k]; });
-  /* split: if the coach moved any movements to the grocery pool, the grocery view shows ONLY those */
-  if(hasExtras()) list=list.filter(function(ex){ return isExtra(ex.id); });
+  /* grocery view shows the full list. Extras only affect the structured view (hidden there). */
   DAYOF={}; var dayset={};
   (PROG.cycles||[]).forEach(function(cy){ (cy.days||[]).forEach(function(day){ var lbl=day.title||day.id||""; (day.exercises||[]).forEach(function(ex){ if(!DAYOF[ex.id]){ DAYOF[ex.id]=lbl; dayset[lbl]=1; } }); }); });
   SHOW_DAYTAG = Object.keys(dayset).length>1;   /* only tag when there are multiple days to tell apart */
@@ -2041,7 +2070,8 @@ function fallbackCopy(text){
   document.body.removeChild(ta);
 }
 document.getElementById("expandAll").addEventListener("click",function(){
-  document.querySelectorAll("details").forEach(function(d){d.open=true;});
+  /* middle ground: open days, sections and category groups, but leave individual exercises closed */
+  document.querySelectorAll("details").forEach(function(d){ d.open = !d.classList.contains("exercise"); });
 });
 document.getElementById("collapseAll").addEventListener("click",function(){
   document.querySelectorAll("details.day, details.exercise, details.section, details.catgroup").forEach(function(d){d.open=false;});

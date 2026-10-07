@@ -175,6 +175,12 @@ tr.chipbar td{background:var(--bg2);padding:6px 10px}
 .btn.small.placement.isextra{color:var(--demo);border-color:var(--demo)}
 .varedit{margin:6px 0 2px;padding:8px 10px;background:var(--inset);border:1px solid var(--hair);border-radius:8px}
 .varedit-h{font-size:.68rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);margin-bottom:6px}
+.vartbl-lbl{font-family:"Fraunces",serif;font-size:.92rem;color:var(--green);margin:10px 0 2px}
+.swaplog-row{display:flex;gap:10px;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--hair-soft);font-size:.9rem}
+.swaplog-date{flex:0 0 auto;color:var(--ink2);min-width:52px}
+.swaplog-txt{flex:1;color:var(--ink)}
+.swaplog-kind{flex:0 0 auto;font-size:.58rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--green);background:var(--inset);border:1px solid var(--hair);border-radius:999px;padding:2px 7px}
+.swaplog-kind.wk{color:var(--demo)}
 .cattags{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center}
 .cattag{flex:0 0 auto;font-size:.58rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--green);background:var(--inset);border:1px solid var(--hair);border-radius:999px;padding:2px 7px}
 .btn.primary{background:var(--green);color:#fff;border-color:var(--green)}
@@ -799,26 +805,34 @@ function renderProgramEditor(){
         var r1=el("div","exrow1");
         r1.appendChild(textInput(ex.name,"exercise name",function(v){ex.name=v; ex.hl=true;}));
         var mv=document.createElement("select");
-        var op0=document.createElement("option"); op0.textContent="Add to…"; op0.value=""; mv.appendChild(op0);
+        var op0=document.createElement("option"); op0.textContent="Move / copy…"; op0.value=""; mv.appendChild(op0);
+        var gMove=document.createElement("optgroup"); gMove.label="Move to (relocate)";
+        var gCopy=document.createElement("optgroup"); gCopy.label="Copy to (keep here too)";
         prog.cycles.forEach(function(cy2,c2){
           cy2.days.forEach(function(d2,dd2){
             if(c2===cyi&&dd2===di)return;
-            var op=document.createElement("option");
-            op.value=c2+":"+dd2;
-            op.textContent=(cy2.label||"cycle")+" / "+(d2.title||d2.id);
-            mv.appendChild(op);
+            var lbl=(d2.title||d2.id)+" · "+(cy2.label||"cycle");
+            var om=document.createElement("option"); om.value="move:"+c2+":"+dd2; om.textContent=lbl; gMove.appendChild(om);
+            var oc=document.createElement("option"); oc.value="copy:"+c2+":"+dd2; oc.textContent=lbl; gCopy.appendChild(oc);
           });
         });
-        mv.style.maxWidth="140px";
+        mv.appendChild(gMove); mv.appendChild(gCopy);
+        mv.style.maxWidth="150px";
         mv.addEventListener("change",function(){
           if(!mv.value)return;
           pushCoachHistory();
-          var parts=mv.value.split(":");
-          var copy=JSON.parse(JSON.stringify(day.exercises[exi]));  /* same id -> shared history, source kept */
-          copy.hl=true;
-          prog.cycles[parts[0]].days[parts[1]].exercises.push(copy);
-          saveProgramSoon(); renderProgramEditor();
-          toast("Added. Old program kept; same history carries over.");
+          var parts=mv.value.split(":"); var act=parts[0], tc=+parts[1], td=+parts[2];
+          if(act==="move"){
+            var moved=day.exercises.splice(exi,1)[0]; moved.hl=true;
+            prog.cycles[tc].days[td].exercises.push(moved);
+            saveProgramSoon(); renderProgramEditor();
+            toast("Moved. It now lives only in the new day.");
+          }else{
+            var copy=JSON.parse(JSON.stringify(day.exercises[exi])); copy.hl=true;   /* same id -> shared history, source kept */
+            prog.cycles[tc].days[td].exercises.push(copy);
+            saveProgramSoon(); renderProgramEditor();
+            toast("Copied. Kept here too; same history carries over.");
+          }
         });
         r1.appendChild(mv);
         var arcE=el("button","btn small","Archive"); arcE.type="button";
@@ -983,7 +997,7 @@ function exById(){
 async function loadLogs(){
   var host=$("tab-logs"); host.textContent="Loading…";
   await loadMeta();
-  GRO.data=await fetchClientFlat(currentSlug); ensureSwapWeekCoach();   /* client overlay: swaps show/edit here too */
+  GRO.data=await fetchClientFlat(currentSlug); ensureSwapWeekCoach(); ensureSwapLogCoach();   /* client overlay: swaps show/edit here too */
   await fetchTagMap(); applyTagMapToClient();
   var r=await fetch(url("/rest/v1/log_entries?client_slug=eq."+esc(currentSlug)+
     "&select=*&order=exercise_id.asc,row_index.asc"),{headers:headers()});
@@ -1061,6 +1075,13 @@ function coachBodyReport(host){
     missCats.forEach(function(c){ var line=el("div","ct-missline"); line.appendChild(el("span","ct-misscat",c)); line.appendChild(el("span","ct-missnames", cats[c].miss.map(function(ex){ return (ex.name||"").replace(/^\d+\/\d+\s+/,""); }).join(", "))); mb.appendChild(line); });
     md.appendChild(mb); wrap.appendChild(md);
   }
+  /* body parts in your tag vocabulary with NO movement assigned in this program */
+  var notProg=catNames.filter(function(c){ return cats[c].hit===0 && cats[c].miss.length===0; });
+  if(notProg.length){
+    var np=el("div","ct-row"); np.appendChild(el("span","ct-lbl","Not programmed"));
+    notProg.forEach(function(c){ np.appendChild(el("span","ct-chip zero",c)); });
+    wrap.appendChild(np);
+  }
   host.appendChild(wrap); return true;
 }
 function renderLogsBody(){
@@ -1105,6 +1126,7 @@ function renderLogsBody(){
   });
   host.appendChild(search);
   var brHost=el("div"); host.appendChild(brHost); coachBodyReport(brHost);
+  var slHost=el("div"); host.appendChild(slHost); renderSwapLogCoach(slHost);
   var map=exById();
   function dayBlock(label,n){
     var det=el("details","logday"); det.open=true;
@@ -1120,7 +1142,7 @@ function renderLogsBody(){
       var det=dayBlock((cy.label||"")+" · "+(day.title||day.id), exs.length);
       exs.forEach(function(ex){
         if(ex.variants && ex.variants.length){
-          ex.variants.forEach(function(v){ det.appendChild(renderLogBlock({id:v.id, name:(ex.name||"")+" · "+(v.name||""), cols:v.cols||ex.cols}, logModel[v.id]||[])); });
+          det.appendChild(renderLogBlock(ex, [], ex.variants));
         }else{
           det.appendChild(renderLogBlock(ex, logModel[ex.id]||[]));
         }
@@ -1145,6 +1167,25 @@ function renderLogsBody(){
 function swapWeekIso(){ var d=new Date(); var day=d.getDay(); d.setDate(d.getDate()-(day===0?6:day-1)); d.setHours(0,0,0,0); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function swapLabel(sw){ return (sw&&sw.week)?"swapped · this week":"swapped"; }
 function ensureSwapWeekCoach(){ if(!GRO.data||!GRO.data.swaps) return; var w=swapWeekIso(),ch=false; Object.keys(GRO.data.swaps).forEach(function(id){ var s=GRO.data.swaps[id]; if(s&&s.week&&s.week!==w){ delete GRO.data.swaps[id]; ch=true; } }); if(ch) saveGrocerySoon(); }
+function ensureSwapLogCoach(){ if(!GRO.data) return; GRO.data.swapLog=GRO.data.swapLog||[]; var ch=false;
+  Object.keys(GRO.data.swaps||{}).forEach(function(id){ var sw=GRO.data.swaps[id]; if(!sw||!sw.to)return;
+    if(!GRO.data.swapLog.some(function(e){ return e.id===id && e.to===sw.to; })){ GRO.data.swapLog.push({date:"",id:id,from:sw.from||"",to:sw.to,kind:sw.week?"week":"permanent",backfilled:true}); ch=true; }
+  });
+  if(ch) saveGrocerySoon();
+}
+function renderSwapLogCoach(host){
+  var log=(GRO.data&&GRO.data.swapLog)||[]; if(!log.length) return false;
+  var sec=el("details","logday"); var sm=el("summary"); sm.appendChild(el("span","logday-t","Swap history")); sm.appendChild(el("span","logday-n",log.length+(log.length===1?" swap":" swaps"))); sec.appendChild(sm);
+  var body=el("div"); body.style.padding="4px 2px";
+  log.slice().reverse().forEach(function(e){
+    var row=el("div","swaplog-row");
+    row.appendChild(el("span","swaplog-date", e.date||"earlier"));
+    row.appendChild(el("span","swaplog-txt", (e.from||"?")+" → "+(e.to||"?")));
+    row.appendChild(el("span","swaplog-kind"+(e.kind==="week"?" wk":""), e.kind==="week"?"this week":"permanent"));
+    body.appendChild(row);
+  });
+  sec.appendChild(body); host.appendChild(sec); return true;
+}
 function coachSwap(span,ex){
   var base=ex.name||"", cur=span.textContent;
   span.contentEditable="true"; span.focus();
@@ -1154,7 +1195,9 @@ function coachSwap(span,ex){
     var v=span.textContent.trim();
     if(!v||v===cur){ span.textContent=cur; return; }
     var temp=!confirm("Keep this swap permanently?\n\nOK = permanent\nCancel = just this week (reverts Monday)");
-    GRO.data=GRO.data||{}; GRO.data.swaps=GRO.data.swaps||{}; GRO.data.swaps[ex.id]={to:v,from:base,week:temp?swapWeekIso():null}; saveGrocerySoon();
+    GRO.data=GRO.data||{}; GRO.data.swaps=GRO.data.swaps||{}; GRO.data.swaps[ex.id]={to:v,from:base,week:temp?swapWeekIso():null};
+    GRO.data.swapLog=GRO.data.swapLog||[]; GRO.data.swapLog.push({date:todayMD(),id:ex.id,from:base,to:v,kind:temp?"week":"permanent"});
+    saveGrocerySoon();
     span.textContent=v;
     if(span.parentNode && !span.parentNode.querySelector(".swaptag")){
       var sbg=el("span","swaptag",swapLabel(GRO.data.swaps[ex.id])); sbg.title="Was: "+base+" · click to undo";
@@ -1165,9 +1208,10 @@ function coachSwap(span,ex){
   span.addEventListener("blur",finish);
   span.addEventListener("keydown",function(k){ if(k.key==="Enter"){ k.preventDefault(); span.blur(); } });
 }
-function renderLogBlock(ex,rows){
+function renderLogBlock(ex,rows,tables){
   var block=el("details","exblock");
   if(coachMeta[ex.id]&&coachMeta[ex.id].revisit) block.classList.add("revisit");
+  var hdrRows=(tables&&tables.length) ? tables.reduce(function(acc,v){ return acc.concat(logModel[v.id]||[]); },[]) : rows;
   var sum=el("summary");
   var h=el("h3");
   var swp0=GRO.data&&GRO.data.swaps&&GRO.data.swaps[ex.id];
@@ -1191,13 +1235,24 @@ function renderLogBlock(ex,rows){
     toast(now?"Marked to revisit":"Cleared");
   });
   h.appendChild(flag);
-  var latest=rows.reduce(function(m,x){return (x.when&&(!m||x.when>m))?x.when:m;},null);
+  var latest=hdrRows.reduce(function(m,x){return (x.when&&(!m||x.when>m))?x.when:m;},null);
   if(latest){
     var d=new Date(latest);
     h.appendChild(el("span","meta","updated "+(d.getMonth()+1)+"/"+d.getDate()));
   }
-  if(rows.length) h.appendChild(el("span","meta",rows.length+(rows.length===1?" set":" sets")));
+  if(hdrRows.length) h.appendChild(el("span","meta",hdrRows.length+(hdrRows.length===1?" set":" sets")));
   sum.appendChild(h); block.appendChild(sum);
+  if(tables && tables.length){
+    tables.forEach(function(v){
+      block.appendChild(el("div","vartbl-lbl", v.name||"Table"));
+      appendLogTable(block, {id:v.id, name:(ex.name||"")+" · "+(v.name||""), cols:v.cols||ex.cols}, logModel[v.id]||[]);
+    });
+    return block;
+  }
+  appendLogTable(block, ex, rows);
+  return block;
+}
+function appendLogTable(block, ex, rows){
   var cols=ex.cols||["Date","Weight","Set","Reps"];
   var wrap=el("div","tblwrap"), t=el("table");
   var thead=el("thead"), htr=el("tr");
@@ -2104,7 +2159,10 @@ function entryTable(arr, fields, onchange, isFms){
     fields.forEach(function(f){
       var td=el("td"); td.textContent=e[f[0]]!=null?e[f[0]]:"";
       try{ td.contentEditable="plaintext-only"; }catch(x){ td.contentEditable="true"; }
-      td.addEventListener("input",function(){ e[f[0]]=td.textContent.trim(); onchange(); });
+      /* save on every keystroke, but DON'T re-render (that rebuilds the tab and drops the
+         keyboard on iOS). Re-render the charts only once focus leaves the whole table. */
+      td.addEventListener("input",function(){ e[f[0]]=td.textContent.trim(); saveProfileSoon(); });
+      td.addEventListener("blur",function(){ setTimeout(function(){ if(!wrap.contains(document.activeElement)) onchange(); },150); });
       tr.appendChild(td);
     });
     if(isFms){ tr.appendChild(el("td","fms-tot",String(fmsTotal(e)))); }
