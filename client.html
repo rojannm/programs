@@ -1990,7 +1990,9 @@ function buildFlat(content){
     if(!cur || (liveIds[ex.id] && !liveIds[cur.id])) byName[k]=ex;
   });
   list=Object.keys(byName).map(function(k){ return byName[k]; });
-  /* grocery view shows the full list. Extras only affect the structured view (hidden there). */
+  /* keep archived/old programs out of the grocery list (only movements in a live cycle) */
+  list=list.filter(function(ex){ return liveIds[ex.id]; });
+  /* grocery view shows the full live list. Extras only affect the structured view (hidden there). */
   DAYOF={}; var dayset={};
   (PROG.cycles||[]).forEach(function(cy){ (cy.days||[]).forEach(function(day){ var lbl=day.title||day.id||""; (day.exercises||[]).forEach(function(ex){ if(!DAYOF[ex.id]){ DAYOF[ex.id]=lbl; dayset[lbl]=1; } }); }); });
   SHOW_DAYTAG = Object.keys(dayset).length>1;   /* only tag when there are multiple days to tell apart */
