@@ -181,6 +181,12 @@ tr.chipbar td{background:var(--bg2);padding:6px 10px}
 .swaplog-txt{flex:1;color:var(--ink)}
 .swaplog-kind{flex:0 0 auto;font-size:.58rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--green);background:var(--inset);border:1px solid var(--hair);border-radius:999px;padding:2px 7px}
 .swaplog-kind.wk{color:var(--demo)}
+.dupgroup{border:1px solid var(--hair);border-radius:10px;padding:10px;margin:0 0 12px;background:var(--inset)}
+.dupline{display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer}
+.dupline input{flex:0 0 auto}
+.dupname{flex:1;font-weight:600;color:var(--ink)}
+.duploc{flex:0 0 auto;font-size:.76rem;color:var(--ink2)}
+.dupgroup .btn{margin-top:8px}
 .cattags{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center}
 .cattag{flex:0 0 auto;font-size:.58rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--green);background:var(--inset);border:1px solid var(--hair);border-radius:999px;padding:2px 7px}
 .btn.primary{background:var(--green);color:#fff;border-color:var(--green)}
@@ -613,6 +619,63 @@ function combineInto(targetEx, cyi, di, exi){
   }
   prog.cycles[cyi].days[di].exercises.splice(exi,1);
 }
+/* ---- duplicate finder (fuzzy: case / spacing / punctuation / plural / word-order / small typos) ---- */
+function normDup(name){ return (""+(name||"")).replace(/^\d+\/\d+\s+/,"").toLowerCase().replace(/[^a-z0-9\s]/g," ").replace(/\s+/g," ").trim(); }
+function dupKey(name){ var words=normDup(name).split(" ").filter(Boolean).map(function(w){return w.replace(/s$/,"");}); words.sort(); return words.join(" "); }
+function levDup(a,b){ var m=a.length,n=b.length; if(!m)return n; if(!n)return m; var dp=[],i,j; for(i=0;i<=n;i++)dp[i]=i; for(i=1;i<=m;i++){ var prev=dp[0]; dp[0]=i; for(j=1;j<=n;j++){ var t=dp[j]; dp[j]=Math.min(dp[j]+1,dp[j-1]+1,prev+(a[i-1]===b[j-1]?0:1)); prev=t; } } return dp[n]; }
+function findDuplicateGroups(){
+  var items=[];
+  (prog.cycles||[]).forEach(function(cy,cyi){ if(cy.archived) return;   /* leave old/archived programs untouched */
+    (cy.days||[]).forEach(function(day,di){ (day.exercises||[]).forEach(function(ex){ if(!ex.name)return; items.push({ex:ex,name:ex.name,cyLabel:cy.label||"cycle",dayTitle:day.title||day.id,archived:false,key:dupKey(ex.name)}); }); }); });
+  var groups={}; items.forEach(function(it){ (groups[it.key]=groups[it.key]||[]).push(it); });
+  var keys=Object.keys(groups);
+  keys.forEach(function(k1,i){ keys.slice(i+1).forEach(function(k2){ if(groups[k1]&&groups[k2]&&Math.min(k1.length,k2.length)>=5 && levDup(k1,k2)<=2){ groups[k1]=groups[k1].concat(groups[k2]); delete groups[k2]; } }); });
+  return Object.keys(groups).map(function(k){return groups[k];}).filter(function(g){return g.length>=2;});
+}
+function locOfObj(obj){ var r=null; (prog.cycles||[]).forEach(function(cy,cyi){(cy.days||[]).forEach(function(day,di){ var exi=day.exercises.indexOf(obj); if(exi>=0)r={cyi:cyi,di:di,exi:exi}; });}); return r; }
+function removeExObj(obj){ (prog.cycles||[]).forEach(function(cy){(cy.days||[]).forEach(function(day){ var i=day.exercises.indexOf(obj); if(i>=0)day.exercises.splice(i,1); });}); }
+function combineGroup(keepObj, group){
+  group.forEach(function(it){
+    if(it.ex===keepObj) return;
+    if(it.ex.id===keepObj.id){ removeExObj(it.ex); }          /* same movement copied to another day: just drop the extra */
+    else { var loc=locOfObj(it.ex); if(loc) combineInto(keepObj, loc.cyi, loc.di, loc.exi); }
+  });
+}
+function openDupFinder(){
+  var back=el("div","tagpick-back"); var box=el("div","tagpick"); box.style.width="min(560px,100%)";
+  function draw(){
+    box.textContent="";
+    box.appendChild(el("div","tagpick-h","Possible duplicates"));
+    var groups=findDuplicateGroups();
+    if(!groups.length){ box.appendChild(el("p","note","No duplicates found. Nice and tidy.")); }
+    groups.forEach(function(g){
+      var card=el("div","dupgroup");
+      var keep=g.find(function(x){return !x.archived;})||g[0]; var keepObj=keep.ex;
+      g.forEach(function(it){
+        var row=el("label","dupline");
+        var rb=document.createElement("input"); rb.type="radio"; rb.name="keep"+g[0].key.replace(/\s/g,"_"); rb.checked=(it.ex===keepObj);
+        rb.addEventListener("change",function(){ keepObj=it.ex; });
+        row.appendChild(rb);
+        row.appendChild(el("span","dupname",(it.name||"").replace(/^\d+\/\d+\s+/,"")));
+        row.appendChild(el("span","duploc",(it.cyLabel||"")+" · "+(it.dayTitle||"")+(it.archived?" · archived":"")));
+        card.appendChild(row);
+      });
+      var cbtn=el("button","btn small primary","Combine · keep the selected one"); cbtn.type="button";
+      cbtn.addEventListener("click",function(){
+        pushCoachHistory(); combineGroup(keepObj, g); saveProgramSoon(); renderProgramEditor();
+        draw();
+      });
+      card.appendChild(cbtn);
+      box.appendChild(card);
+    });
+    var done=el("button","btn small tagpick-done","Close"); done.type="button"; done.addEventListener("click",close); box.appendChild(done);
+  }
+  function close(){ if(back.parentNode)back.parentNode.removeChild(back); document.removeEventListener("keydown",esc); }
+  function esc(e){ if(e.key==="Escape")close(); }
+  back.addEventListener("click",function(e){ if(e.target===back)close(); });
+  document.addEventListener("keydown",esc);
+  draw(); back.appendChild(box); document.body.appendChild(back);
+}
 function textInput(value,placeholder,onchange){
   var i=document.createElement("input");
   i.type="text"; i.value=value||""; i.placeholder=placeholder||"";
@@ -637,6 +700,10 @@ function renderProgramEditor(){
   var rb=el("button","btn small","↷ Redo"); rb.type="button"; rb.id="cRedoBtn"; rb.disabled=!cRedo.length;
   rb.addEventListener("click",coachRedo);
   hbar.appendChild(ub); hbar.appendChild(rb);
+  var dupB=el("button","btn small","Find duplicates"); dupB.type="button";
+  dupB.title="Scan this program for duplicate movements (even if spelled a bit differently)";
+  dupB.addEventListener("click",openDupFinder);
+  hbar.appendChild(dupB);
   host.appendChild(hbar);
 
   var idrow=el("div");

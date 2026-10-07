@@ -169,6 +169,9 @@ details.exercise.overdue > summary h3{color:var(--danger)}
 .swaplog-txt{flex:1;color:var(--ink)}
 .swaplog-kind{flex:0 0 auto;font-size:.58rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--green);background:var(--inset);border:1px solid var(--hair);border-radius:999px;padding:2px 7px}
 .swaplog-kind.wk{color:var(--demo)}
+.archived-programs > summary h2{color:var(--ink2)}
+.archived-programs{opacity:.85}
+.archived-programs .archived-cy > summary h2{color:var(--ink2);font-style:italic}
 .tagpick-back{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px}
 .tagpick{background:var(--card);border:1px solid var(--hair);border-radius:16px;padding:16px;width:min(420px,100%);max-height:80vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.3)}
 .tagpick-h{font-family:"Fraunces",Georgia,serif;font-size:1.05rem;margin:0 0 12px;color:var(--ink)}
@@ -1019,8 +1022,17 @@ function build(){
     trackOpen(warm,"sec:warm");
   }
 
+  var archWrap=null, archBody=null;
+  function archivedHost(){
+    if(!archWrap){
+      archWrap=el("details","section archived-programs");
+      var asum=el("summary"); asum.appendChild(el("span","chev")); asum.appendChild(el("h2",null,"Archived programs")); asum.appendChild(el("span","count","past cycles, tucked away")); archWrap.appendChild(asum);
+      archBody=el("div"); archWrap.appendChild(archBody); trackOpen(archWrap,"sec:archived-programs");
+    }
+    return archBody;
+  }
   (PROG.cycles||[]).forEach(function(cy,cyi){
-    var sec=el("details","section");
+    var sec=el("details","section"+(cy.archived?" archived-cy":""));
     var sum=el("summary"); sum.appendChild(el("span","chev"));
     sum.appendChild(el("h2",null,cy.label||"Program"));
     sum.appendChild(el("span","count",cy.archived?"archived":(cy.days||[]).length+" days"));
@@ -1140,8 +1152,10 @@ function build(){
     });
     if(store.open["cy:"+cy.id]===undefined && cyi===0 && !cy.archived) sec.open=true;
     trackOpen(sec,"cy:"+cy.id);
-    content.appendChild(sec);
+    if(cy.archived){ sec.open=false; archivedHost().appendChild(sec); }
+    else content.appendChild(sec);
   });
+  if(archWrap) content.appendChild(archWrap);
 
   /* now that exIndex is populated, fill the body-part report from every unique movement */
   (function(){
@@ -2070,11 +2084,18 @@ function fallbackCopy(text){
   document.body.removeChild(ta);
 }
 document.getElementById("expandAll").addEventListener("click",function(){
-  /* middle ground: open days, sections and category groups, but leave individual exercises closed */
-  document.querySelectorAll("details").forEach(function(d){ d.open = !d.classList.contains("exercise"); });
+  /* middle ground: open days, sections and category groups, but leave individual exercises closed.
+     Archived programs are left untouched so they stay tucked away. */
+  document.querySelectorAll("details").forEach(function(d){
+    if(d.closest(".archived-programs")) return;
+    d.open = !d.classList.contains("exercise");
+  });
 });
 document.getElementById("collapseAll").addEventListener("click",function(){
-  document.querySelectorAll("details.day, details.exercise, details.section, details.catgroup").forEach(function(d){d.open=false;});
+  document.querySelectorAll("details.day, details.exercise, details.section, details.catgroup").forEach(function(d){
+    if(d.closest(".archived-programs")) return;
+    d.open=false;
+  });
 });
 document.getElementById("undoBtn").addEventListener("click",doUndo);
 document.getElementById("redoBtn").addEventListener("click",doRedo);
