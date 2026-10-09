@@ -275,6 +275,7 @@ details.exercise[open] > summary h3{color:var(--accent);font-weight:600}
 .coachtag{background:var(--coach-soft);color:var(--coach)}
 .ex-body{padding:2px 2px 14px}
 .ex-note{color:var(--ink2);font-size:.88rem;margin:0 0 10px;padding-left:2px}
+.coach-note{color:var(--ink);font-weight:700;font-size:.92rem}
 .tbl-label{font-size:.75rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
   color:var(--ink2);margin:0 0 6px;padding-left:2px}
 .tblwrap{overflow-x:auto;border:1px solid var(--hair);border-radius:10px}
@@ -297,6 +298,7 @@ tr.chipbar td{background:var(--bg2);padding:6px 10px;border-bottom:1px solid var
 .chip{font:inherit;font-size:.78rem;font-weight:600;color:var(--ink2);background:var(--card);
   border:1px solid var(--hair);border-radius:999px;padding:4px 12px;cursor:pointer;margin-right:6px}
 .chip.on{color:var(--accent);border-color:var(--accent)}
+.chip-lbl{font-size:.66rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);margin:0 4px 0 8px}
 .exactions{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
 .addrow{margin-top:8px;font:inherit;font-size:.88rem;font-weight:600;color:var(--accent);
   background:none;border:0;cursor:pointer;padding:6px 2px}
@@ -814,6 +816,17 @@ function chipBarFor(ex,container){
     });
     chip("L weaker",function(){toggleNote("L weaker");},function(){return getCell(ni).indexOf("L weaker")>=0;});
     chip("R weaker",function(){toggleNote("R weaker");},function(){return getCell(ni).indexOf("R weaker")>=0;});
+    /* quick-add blobs: your recent weights and reps for this movement, tap to drop them in */
+    var r=rowsFor(ex), wSeen={}, rSeen={}, wVals=[], rVals=[];
+    for(var qi=r.length-1; qi>=0 && (wVals.length<5||rVals.length<5); qi--){
+      var wv=((r[qi]&&r[qi][wi])||"").replace(/(^|\s)(WU|bi|uni)(\s|$)/gi," ").replace(/\s+/g," ").trim();
+      if(wv && !wSeen[wv.toLowerCase()] && wVals.length<5){ wSeen[wv.toLowerCase()]=1; wVals.push(wv); }
+      var rm=((r[qi]&&r[qi][ni])||"").trim().match(/^\d+/); var rv=rm?rm[0]:"";
+      if(rv && !rSeen[rv] && rVals.length<5){ rSeen[rv]=1; rVals.push(rv); }
+    }
+    if(wVals.length||rVals.length) td.appendChild(el("span","chip-lbl","quick:"));
+    wVals.forEach(function(v){ chip(v,function(){ setCell(wi,v); }); });
+    rVals.forEach(function(v){ chip("×"+v,function(){ setCell(ni,v); }); });
   };
   tr.appendChild(td);
   return tr;
@@ -988,7 +1001,7 @@ function build(){
       '<p><span class="k">3x12</span> means 3 sets of 12 repetitions.</p>'+
       '<p><span class="k">1/2 exercise A</span> and <span class="k">2/2 exercise B</span> is a superset: do A, then B right after, no rest between.</p>'+
       '<p>An orange <span class="k">demo</span> tag means Rojan shows you first before you try it.</p>'+
-      '<p>A blue <span class="k">from Rojan</span> tag or a blue-tinted row means your coach added or changed it since you last trained.</p>'+
+      '<p>A blue-tinted row means your coach added or changed it since you last trained.</p>'+
       '<p>Tap an exercise to open its log, tap a cell to edit. <span class="k">Add entry</span> starts a row with today’s date. <span class="k">Same as last time</span> repeats your last session. The <span class="k">WU</span> and <span class="k">L/R weaker</span> chips under the row you’re in add those notes with one tap.</p>';
     keys.appendChild(kbody);
     content.appendChild(keys);
@@ -1052,7 +1065,7 @@ function build(){
       var tog=el("button","daytoggle","Open all"); tog.type="button";
       d.appendChild(dsum);
       var body=el("div","day-body"); d.appendChild(body);
-      if(day.note) body.appendChild(el("p","ex-note",day.note));
+      if(day.note) body.appendChild(el("p","ex-note coach-note",day.note));
       var exDetails=[];
       visEx.forEach(function(ex){
         exIndex[ex.id]=ex;
@@ -1087,7 +1100,6 @@ function build(){
         if(ss)esum.appendChild(el("span","sstag",ss));
         tagsOf(ex.id).forEach(function(t){ esum.appendChild(el("span","cattag",t)); });
         if(ex.demo)esum.appendChild(el("span","demotag","demo with Rojan"));
-        if(ex.hl)esum.appendChild(el("span","coachtag","from Rojan"));
         var swp=el("button","swapbtn","⇄"); swp.type="button"; swp.title="Swap for a different version";
         swp.addEventListener("click",function(e){ e.preventDefault(); e.stopPropagation(); startSwap(h3,ex); });
         esum.appendChild(swp);
@@ -1105,7 +1117,7 @@ function build(){
         esum.appendChild(flag);
         exd.appendChild(esum);
         var ebody=el("div","ex-body");
-        if(ex.note)ebody.appendChild(el("p","ex-note",ex.note));
+        if(ex.note)ebody.appendChild(el("p","ex-note coach-note",ex.note));
         if(ex.label && !(ex.variants&&ex.variants.length))ebody.appendChild(el("p","tbl-label",ex.label));
         (function(){
           var noteWrap=el("div","exnote-wrap");
