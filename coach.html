@@ -1262,9 +1262,33 @@ function coachBodyReport(host){
   }
   host.appendChild(wrap); return true;
 }
+/* merge a movement's logged history that ended up on an older copy (same name, different id) */
+function reconnectHistory(){
+  if(!confirm("Find movements whose log history is sitting on an older copy (same name, different id) and merge it into the current movement?\n\nYour newer entries are kept, old history is added before them, and nothing is deleted.")) return;
+  var byName={};
+  function idx(ex){ if(!ex||!ex.name)return; var k=normName(ex.name); (byName[k]=byName[k]||{})[ex.id]=1; if(ex.variants)ex.variants.forEach(function(v){ (byName[normName(v.name||ex.name)]=byName[normName(v.name||ex.name)]||{})[v.id]=1; }); }
+  (prog.cycles||[]).forEach(function(cy){ (cy.days||[]).forEach(function(day){ (day.exercises||[]).forEach(idx); }); });
+  (prog.archived_exercises||[]).forEach(idx);
+  var targets=[], seen={};
+  (prog.cycles||[]).forEach(function(cy){ if(cy.archived||cy.draft)return; (cy.days||[]).forEach(function(day){ (day.exercises||[]).forEach(function(ex){ if(!ex.name||seen[ex.id])return; seen[ex.id]=1; targets.push(ex); }); }); });
+  var merged=0, added=0;
+  targets.forEach(function(ex){
+    var ids=byName[normName(ex.name)]||{}; var oldRows=[];
+    Object.keys(ids).forEach(function(oid){ if(oid===ex.id)return; (logModel[oid]||[]).forEach(function(r){ oldRows.push(r); }); });
+    if(!oldRows.length) return;
+    var existing=logModel[ex.id]||[]; var keys={}; existing.forEach(function(r){ keys[JSON.stringify(r.cells)]=1; });
+    var toAdd=oldRows.filter(function(r){ var kk=JSON.stringify(r.cells); if(keys[kk])return false; keys[kk]=1; return true; });
+    if(!toAdd.length) return;
+    logModel[ex.id]=toAdd.concat(existing);   /* old history first, then your newer entries */
+    pushCoachRows(ex, logModel[ex.id]);
+    merged++; added+=toAdd.length;
+  });
+  renderLogsBody();
+  toast(merged ? ("Merged history into "+merged+" movement"+(merged===1?"":"s")+" ("+added+" past sets added)") : "No older history found to merge.");
+}
 function renderLogsBody(){
   var host=$("tab-logs"); host.textContent="";
-  var bar=el("div"); bar.style.cssText="display:flex;gap:6px;margin:0 0 8px";
+  var bar=el("div"); bar.style.cssText="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 8px";
   var ub=el("button","btn small","↶ Undo"); ub.type="button"; ub.id="logUndoBtn"; ub.disabled=!lUndo.length; ub.addEventListener("click",logUndo);
   var rb=el("button","btn small","↷ Redo"); rb.type="button"; rb.id="logRedoBtn"; rb.disabled=!lRedo.length; rb.addEventListener("click",logRedo);
   bar.appendChild(ub); bar.appendChild(rb);
@@ -1275,6 +1299,10 @@ function renderLogsBody(){
     host.querySelectorAll(".exblock.revisit").forEach(function(b){ b.classList.remove("revisit"); });
     toast(any?"Flags cleared":"No flags");
   });
+  var rc=el("button","btn small","Reconnect past history"); rc.type="button";
+  rc.title="Merge in history that ended up on an older copy of a movement (same name, different id)";
+  rc.addEventListener("click",reconnectHistory);
+  bar.appendChild(rc);
   bar.appendChild(clr);
   var exp=el("button","btn small","Expand all"); exp.type="button";
   exp.addEventListener("click",function(){ host.querySelectorAll(".logday,.exblock").forEach(function(d){ d.open=true; }); });
