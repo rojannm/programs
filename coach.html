@@ -311,7 +311,8 @@ tr.chipbar td{background:var(--bg2);padding:6px 10px}
 .remind-item{display:flex;align-items:center;gap:8px;background:var(--accent-soft);border:1px solid var(--hair);border-radius:10px;padding:9px 12px;margin-bottom:6px;font-size:.86rem}
 .remind-item .rdot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex:0 0 auto}
 .remind-item.prog .rdot{background:var(--green)}
-.remind-item a{color:var(--accent);font-weight:700;cursor:pointer;text-decoration:underline}
+.remind-item a{color:var(--accent);font-weight:700;cursor:pointer;text-decoration:underline;margin-left:auto}
+.remind-done{font:inherit;font-size:.78rem;font-weight:600;color:var(--green);background:var(--card);border:1px solid var(--hair);border-radius:999px;padding:4px 10px;cursor:pointer;flex:0 0 auto}
 #toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(80px);
   background:var(--ink);color:var(--bg);padding:10px 20px;border-radius:999px;font-size:.9rem;
   font-weight:600;opacity:0;transition:all .25s ease;pointer-events:none;z-index:50;white-space:nowrap}
@@ -487,8 +488,13 @@ function parseDateLoose(s){
 }
 function addDays(d,n){ var x=new Date(d); x.setDate(x.getDate()+n); return x; }
 function fmtMD(d){ return (d.getMonth()+1)+"/"+d.getDate(); }
+var DISMISSED={}, dismissedLoaded=false;
+async function fetchDismissed(){ try{ var r=await fetch(url("/rest/v1/client_flat?client_slug=eq._reminders&select=data"),{headers:headers()}); if(!r.ok)return; var a=await r.json(); DISMISSED={}; if(a.length){ var d={}; try{d=JSON.parse(a[0].data||"{}");}catch(e){} (d.dismissed||[]).forEach(function(s){ DISMISSED[s]=1; }); } }catch(e){} }
+async function saveDismissed(){ try{ await fetch(url("/rest/v1/client_flat?on_conflict=client_slug"),{method:"POST",headers:headers({"Prefer":"resolution=merge-duplicates,return=minimal"}),body:JSON.stringify([{client_slug:"_reminders",data:JSON.stringify({dismissed:Object.keys(DISMISSED)}),updated_at:new Date().toISOString()}])}); }catch(e){} }
+function dismissReminder(sig){ DISMISSED[sig]=1; saveDismissed(); renderReminders(); toast("Reminder cleared"); }
 async function renderReminders(){
   var host=$("reminders"); if(!host) return; host.textContent="";
+  if(!dismissedLoaded){ await fetchDismissed(); dismissedLoaded=true; }
   var rows=[];
   try{ var r=await fetch(url("/rest/v1/client_profile?select=client_slug,data"),{headers:headers()}); if(r.ok) rows=await r.json(); }
   catch(e){ return; }
@@ -499,20 +505,25 @@ async function renderReminders(){
     var sc=d.schedule||{}, ib=d.inbody||[], nm=nameFor(row.client_slug);
     if(sc.inbodyRemind!==false && sc.inbodyWeeks && ib.length){
       var last=ib.map(function(e){return parseDateLoose(e.date);}).filter(Boolean).sort(function(a,b){return a-b;}).pop();
-      if(last){ var due=addDays(last,sc.inbodyWeeks*7); if(today>=due) items.push({slug:row.client_slug,type:"inbody",text:nm+" is due for an InBody re-scan (last "+fmtMD(last)+")"}); }
+      if(last){ var due=addDays(last,sc.inbodyWeeks*7); if(today>=due) items.push({slug:row.client_slug,type:"inbody",sig:row.client_slug+"|inbody|"+fmtMD(last),text:nm+" is due for an InBody re-scan (last "+fmtMD(last)+")"}); }
     }
     if(sc.start && sc.weeks){
       var st=parseDateLoose(sc.start);
       if(st){ var end=addDays(st,sc.weeks*7), warn=addDays(end,-7);
-        if(today>=warn) items.push({slug:row.client_slug,type:"prog",text: today>=end ? (nm+"'s program has ended ("+fmtMD(end)+") — time to re-program") : (nm+"'s program ends "+fmtMD(end)) }); }
+        if(today>=warn) items.push({slug:row.client_slug,type:"prog",sig:row.client_slug+"|prog|"+fmtMD(end),text: today>=end ? (nm+"'s program has ended ("+fmtMD(end)+") — time to re-program") : (nm+"'s program ends "+fmtMD(end)) }); }
     }
   });
+  items=items.filter(function(it){ return !DISMISSED[it.sig]; });
   items.forEach(function(it){
     var box=el("div","remind-item"+(it.type==="prog"?" prog":""));
     box.appendChild(el("span","rdot"));
     box.appendChild(el("span",null,it.text));
     var go=el("a",null,"Open"); go.addEventListener("click",function(){ selectClient(it.slug); window.scrollTo(0,0); });
-    box.appendChild(go); host.appendChild(box);
+    box.appendChild(go);
+    var done=el("button","remind-done","✓ Done"); done.type="button"; done.title="Clear this reminder until it's due again";
+    done.addEventListener("click",function(){ dismissReminder(it.sig); });
+    box.appendChild(done);
+    host.appendChild(box);
   });
 }
 function renderClients(){
