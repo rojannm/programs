@@ -89,6 +89,36 @@ textarea{min-height:120px;resize:vertical}
 .dayexwrap>summary::before{content:"\25B8 ";color:var(--ink2)}
 .dayexwrap[open]>summary::before{content:"\25BE "}
 .dayexcount{color:var(--ink2)}
+/* new-program builder */
+.pill{font-size:.7rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;border-radius:999px;padding:3px 10px}
+.pill.draft{color:var(--demo);background:var(--demo-soft)}
+.draftbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0 4px;padding:10px 12px;background:var(--inset);border:1px solid var(--hair);border-radius:10px}
+.draftbar-name{color:var(--ink)}
+.builder-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 8px}
+.builder-name{font-weight:600;min-width:160px}
+.builder-wrap{display:flex;gap:12px;align-items:flex-start}
+.builder-rail{flex:0 0 230px;border:1px solid var(--hair);border-radius:12px;background:var(--bg);padding:10px;max-height:70vh;overflow:auto}
+.rail-srch{width:100%;font:inherit;font-size:.85rem;border:1px solid var(--hair);border-radius:8px;padding:6px 10px;margin-bottom:8px;background:var(--card);color:var(--ink)}
+.rail-h{font-size:.64rem;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--ink2);margin:10px 0 6px}
+.rail-blobs{display:flex;flex-wrap:wrap;gap:6px}
+.blob{font-size:.8rem;font-weight:600;color:var(--ink);background:var(--card);border:1px solid var(--hair);border-radius:999px;padding:5px 11px;cursor:pointer;user-select:none}
+.blob.hist{border-color:#B9C7AD}
+.blob.hist::after{content:"hx";font-size:.52rem;font-weight:800;text-transform:uppercase;color:var(--green);background:#E4EADF;border-radius:999px;padding:1px 5px;margin-left:6px;vertical-align:middle}
+.blob.newb{color:var(--green);border-style:dashed}
+.builder-board{flex:1;overflow-x:auto}
+.builder-days{display:flex;gap:10px;align-items:flex-start}
+.bday{flex:0 0 190px;background:var(--inset);border:1px solid var(--hair);border-radius:12px;padding:10px}
+.bday.sel{border-color:var(--green);box-shadow:0 0 0 2px #E4EADF}
+.bday-h{display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap}
+.bday-sel{font:inherit;font-size:.68rem;font-weight:700;border:1px solid var(--hair);background:var(--card);color:var(--ink2);border-radius:999px;padding:3px 8px;cursor:pointer}
+.bday-sel.on{color:#fff;background:var(--green);border-color:var(--green)}
+.bday-title{font:inherit;font-weight:600;border:1px solid var(--hair);border-radius:7px;padding:4px 7px;width:100%;background:var(--card);color:var(--ink)}
+.bdrop{min-height:70px;border:1.5px dashed var(--hair);border-radius:9px;padding:7px;display:flex;flex-direction:column;gap:6px}
+.bdrop.over{border-color:var(--green);background:#fff}
+.bitem{background:var(--card);border:1px solid var(--hair);border-radius:8px;padding:6px 8px;font-size:.83rem;display:flex;align-items:center;gap:6px;cursor:grab}
+.bitem-name{flex:1}
+.bitem .x{border:0;background:none;color:var(--ink2);font-size:1.05rem;line-height:1;cursor:pointer;padding:0}
+.bhint{color:var(--ink2);font-size:.76rem;text-align:center;padding:10px 4px}
 .dayhead{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
 .daycolor{display:inline-flex;align-items:center;gap:5px}
 .daycolor input[type=color]{width:32px;height:30px;padding:2px;border:1px solid var(--hair);border-radius:8px;background:var(--card);cursor:pointer}
@@ -633,6 +663,122 @@ function check(labelText,val,onchange){
 }
 var dragSrc=null;
 var editorOpenDays={};   /* which days are expanded in the editor, survives re-renders */
+/* ===== new-program builder (draft -> publish) ===== */
+function findDraft(){ return (prog.cycles||[]).filter(function(cy){return cy.draft;})[0]; }
+function liveCycle(){ return (prog.cycles||[]).filter(function(cy){return !cy.draft && !cy.archived;})[0]; }
+function createDraft(fromCurrent){
+  pushCoachHistory();
+  var d=null;
+  if(fromCurrent){ var live=liveCycle(); if(live){ d=JSON.parse(JSON.stringify(live)); d.id="cy"+randToken(6); d.archived=false; d.label=(live.label?live.label+" ":"")+"(new)"; } }
+  if(!d){ d={id:"cy"+randToken(6), label:"New program", days:[
+    {id:"A",type:"pt",title:"Day A",tag:"",exercises:[]},
+    {id:"B",type:"self",title:"Day B",tag:"",exercises:[]},
+    {id:"C",type:"self",title:"Day C",tag:"",exercises:[]}]}; }
+  d.draft=true; prog.cycles.unshift(d); saveProgramSoon(); return d;
+}
+function publishDraft(d){
+  pushCoachHistory();
+  (prog.cycles||[]).forEach(function(cy){ if(cy!==d && !cy.archived && !cy.draft) cy.archived=true; });
+  delete d.draft; saveProgramSoon();
+}
+function discardDraft(d){ var i=(prog.cycles||[]).indexOf(d); if(i>=0)prog.cycles.splice(i,1); saveProgramSoon(); }
+function clientMovements(){
+  var cur=[], past=[], seen={}, live=liveCycle();
+  function push(arr,ex){ var k=normName(ex.name); if(!k||seen[k])return; seen[k]=1; arr.push({id:ex.id,name:ex.name}); }
+  if(live)(live.days||[]).forEach(function(day){(day.exercises||[]).forEach(function(ex){ if(ex.name)push(cur,ex); });});
+  (prog.cycles||[]).forEach(function(cy){ if(cy===live||cy.draft)return; (cy.days||[]).forEach(function(day){(day.exercises||[]).forEach(function(ex){ if(ex.name)push(past,ex); });}); });
+  (prog.archived_exercises||[]).forEach(function(ex){ if(ex.name)push(past,ex); });
+  return {cur:cur,past:past};
+}
+var builderSelDay=0, builderDrag=null;
+function renderBuilder(d){
+  var host=$("tab-program"); host.textContent="";
+  var bar=el("div","builder-bar");
+  var back=el("button","btn small","← Back"); back.type="button"; back.addEventListener("click",function(){ renderProgramEditor(); });
+  bar.appendChild(back);
+  bar.appendChild(el("span","pill draft","Draft"));
+  var nameI=textInput(d.label||"New program","program name",function(v){ d.label=v; }); nameI.className="builder-name"; bar.appendChild(nameI);
+  var sp=el("span"); sp.style.flex="1"; bar.appendChild(sp);
+  var pub=el("button","btn small primary","Publish to client"); pub.type="button";
+  pub.addEventListener("click",function(){ if(!confirm("Publish \""+(d.label||"this program")+"\" to the client now?\n\nThe current program gets archived and this becomes live.")) return; publishDraft(d); toast("Published. The client sees it on their next load."); renderProgramEditor(); });
+  bar.appendChild(pub);
+  var disc=el("button","btn small danger","Discard"); disc.type="button";
+  disc.addEventListener("click",function(){ if(!confirm("Discard this draft? It was never shown to the client.")) return; discardDraft(d); renderProgramEditor(); });
+  bar.appendChild(disc);
+  host.appendChild(bar);
+  host.appendChild(el("p","note","Tap a movement on the left to add it to the day you're filling, or drag it onto a day. Movements they've done before keep their history. Nothing reaches the client until you Publish."));
+
+  var wrap=el("div","builder-wrap");
+  var rail=el("div","builder-rail");
+  var srch=document.createElement("input"); srch.className="rail-srch"; srch.type="search"; srch.placeholder="Search movements…";
+  rail.appendChild(srch);
+  var blobsHost=el("div"); rail.appendChild(blobsHost);
+  var board=el("div","builder-board"); var boardHost=el("div","builder-days"); board.appendChild(boardHost);
+  wrap.appendChild(rail); wrap.appendChild(board); host.appendChild(wrap);
+
+  function addToDay(name,id){ var day=d.days[builderSelDay]; if(!day)return; day.exercises=day.exercises||[]; day.exercises.push({id:id||newExId(day.id),name:name,cols:["Date","Weight","Set","Reps"]}); saveProgramSoon(); drawDays(); }
+  function drawRail(){
+    var q=(srch.value||"").trim().toLowerCase(); blobsHost.textContent="";
+    var mv=clientMovements();
+    function group(title,items,hist){
+      var f=items.filter(function(it){ return !q || it.name.toLowerCase().indexOf(q)>=0; });
+      if(!f.length) return;
+      blobsHost.appendChild(el("div","rail-h",title));
+      var bl=el("div","rail-blobs");
+      f.forEach(function(it){
+        var b=el("button","blob"+(hist?" hist":""),it.name); b.type="button"; b.draggable=true;
+        b.addEventListener("click",function(){ addToDay(it.name, hist?it.id:newExId("x")); });
+        b.addEventListener("dragstart",function(e){ builderDrag={name:it.name,id:hist?it.id:null}; e.dataTransfer.effectAllowed="copy"; });
+        bl.appendChild(b);
+      });
+      blobsHost.appendChild(bl);
+    }
+    group("In their current program · drag to reuse", mv.cur, true);
+    group("Their past movements", mv.past, true);
+    blobsHost.appendChild(el("div","rail-h","Add new"));
+    var nb=el("button","blob newb","+ new movement"); nb.type="button";
+    nb.addEventListener("click",function(){ var n=prompt("New movement name:"); if(!n)return; addToDay(n.trim()); });
+    var nw=el("div","rail-blobs"); nw.appendChild(nb); blobsHost.appendChild(nw);
+  }
+  srch.addEventListener("input",drawRail);
+  function handleDrop(di){
+    var day=d.days[di]; if(!day||!builderDrag)return; day.exercises=day.exercises||[];
+    if(builderDrag.move){ var s=d.days[builderDrag.move.di]; var ex=s.exercises.splice(builderDrag.move.exi,1)[0]; day.exercises.push(ex); }
+    else { day.exercises.push({id:builderDrag.id||newExId(day.id),name:builderDrag.name,cols:["Date","Weight","Set","Reps"]}); }
+    builderDrag=null; saveProgramSoon(); drawDays();
+  }
+  function drawDays(){
+    boardHost.textContent="";
+    (d.days||[]).forEach(function(day,di){
+      var col=el("div","bday"+(di===builderSelDay?" sel":""));
+      var h=el("div","bday-h");
+      var selBtn=el("button","bday-sel"+(di===builderSelDay?" on":""),di===builderSelDay?"● adding here":"add here"); selBtn.type="button";
+      selBtn.addEventListener("click",function(){ builderSelDay=di; drawDays(); });
+      var ti=textInput(day.title||("Day "+day.id),"day title",function(v){ day.title=v; }); ti.className="bday-title";
+      var rm=el("button","btn small danger","×"); rm.type="button"; rm.title="Remove day";
+      rm.addEventListener("click",function(){ if(!confirm("Remove this day from the draft?"))return; d.days.splice(di,1); if(builderSelDay>=d.days.length)builderSelDay=Math.max(0,d.days.length-1); saveProgramSoon(); drawDays(); });
+      h.appendChild(selBtn); h.appendChild(ti); h.appendChild(rm); col.appendChild(h);
+      var drop=el("div","bdrop");
+      (day.exercises||[]).forEach(function(ex,exi){
+        var it=el("div","bitem"); it.draggable=true;
+        it.appendChild(el("span","bitem-name",(ex.name||"").replace(/^\d+\/\d+\s+/,"")));
+        var x=el("button","x","×"); x.type="button"; x.addEventListener("click",function(){ day.exercises.splice(exi,1); saveProgramSoon(); drawDays(); }); it.appendChild(x);
+        it.addEventListener("dragstart",function(e){ builderDrag={move:{di:di,exi:exi}}; e.dataTransfer.effectAllowed="move"; });
+        drop.appendChild(it);
+      });
+      if(!(day.exercises||[]).length) drop.appendChild(el("div","bhint","tap a movement, or drag here"));
+      drop.addEventListener("dragover",function(e){ e.preventDefault(); drop.classList.add("over"); });
+      drop.addEventListener("dragleave",function(){ drop.classList.remove("over"); });
+      drop.addEventListener("drop",function(e){ e.preventDefault(); drop.classList.remove("over"); handleDrop(di); });
+      col.appendChild(drop);
+      boardHost.appendChild(col);
+    });
+    var addDay=el("button","btn small","+ Day"); addDay.type="button";
+    addDay.addEventListener("click",function(){ d.days=d.days||[]; var idc=String.fromCharCode(65+d.days.length); d.days.push({id:idc,type:"self",title:"Day "+idc,tag:"",exercises:[]}); saveProgramSoon(); drawDays(); });
+    boardHost.appendChild(addDay);
+  }
+  drawRail(); drawDays();
+}
 function renderProgramEditor(){
   var host=$("tab-program"); host.textContent="";
   if(!prog){ host.appendChild(el("p","note","Loading…")); return; }
@@ -644,6 +790,22 @@ function renderProgramEditor(){
   rb.addEventListener("click",coachRedo);
   hbar.appendChild(ub); hbar.appendChild(rb);
   host.appendChild(hbar);
+
+  /* new-program builder entry point */
+  var draft=findDraft();
+  var dbar=el("div","draftbar");
+  if(draft){
+    dbar.appendChild(el("span","pill draft","Draft in progress"));
+    dbar.appendChild(el("strong","draftbar-name",draft.label||"New program"));
+    var openB=el("button","btn small","Open builder"); openB.type="button"; openB.addEventListener("click",function(){ builderSelDay=0; renderBuilder(draft); }); dbar.appendChild(openB);
+    var pubB=el("button","btn small primary","Publish"); pubB.type="button"; pubB.addEventListener("click",function(){ if(!confirm("Publish \""+(draft.label||"this program")+"\" now? The current program gets archived."))return; publishDraft(draft); toast("Published."); renderProgramEditor(); }); dbar.appendChild(pubB);
+    var discB=el("button","btn small danger","Discard"); discB.type="button"; discB.addEventListener("click",function(){ if(!confirm("Discard this draft?"))return; discardDraft(draft); renderProgramEditor(); }); dbar.appendChild(discB);
+  }else{
+    var nb=el("button","btn small primary","✎ Build a new program"); nb.type="button";
+    nb.addEventListener("click",function(){ var fromCur=confirm("Start from their current program?\n\nOK = copy the current program as a starting point (history kept)\nCancel = start blank"); var dd=createDraft(fromCur); builderSelDay=0; renderBuilder(dd); });
+    dbar.appendChild(nb);
+  }
+  host.appendChild(dbar);
 
   var idrow=el("div");
   var nameL=el("label",null,"Client display name"); idrow.appendChild(nameL);
@@ -688,6 +850,7 @@ function renderProgramEditor(){
   host.appendChild(addCyRow);
 
   (prog.cycles=prog.cycles||[]).forEach(function(cy,cyi){
+    if(cy.draft) return;   /* drafts are edited in the builder, not the normal cycle list */
     var c=el("div","cycle"+(cy.archived?" archived":""));
     var head=el("div","cyhead");
     head.appendChild(textInput(cy.label,"cycle name",function(v){cy.label=v;}));

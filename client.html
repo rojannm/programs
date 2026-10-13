@@ -1045,6 +1045,7 @@ function build(){
     return archBody;
   }
   (PROG.cycles||[]).forEach(function(cy,cyi){
+    if(cy.draft) return;   /* unpublished draft: never shown to the client */
     var sec=el("details","section"+(cy.archived?" archived-cy":""));
     var sum=el("summary"); sum.appendChild(el("span","chev"));
     sum.appendChild(el("h2",null,cy.label||"Program"));
@@ -1172,7 +1173,7 @@ function build(){
   /* now that exIndex is populated, fill the body-part report from every unique movement */
   (function(){
     var seen={}; FLATLIST=[];
-    (PROG.cycles||[]).forEach(function(cy){ (cy.days||[]).forEach(function(day){ (day.exercises||[]).forEach(function(ex){
+    (PROG.cycles||[]).forEach(function(cy){ if(cy.draft)return; (cy.days||[]).forEach(function(day){ (day.exercises||[]).forEach(function(ex){
       if(seen[ex.id]||!ex.name||isExtra(ex.id)) return; seen[ex.id]=1; FLATLIST.push(ex);
     }); }); });
     var anyTag=FLATLIST.some(function(ex){ return hasAnyTag(ex.id); });
@@ -1993,7 +1994,7 @@ function buildFlat(content){
   /* dedupe by movement name so old-program copies don't show as separate rows.
      keep the live-cycle instance if there is one (else the first/newest). No data is changed. */
   var liveIds={};
-  (PROG.cycles||[]).forEach(function(cy){ if(!cy.archived) (cy.days||[]).forEach(function(day){ (day.exercises||[]).forEach(function(e){ liveIds[e.id]=1; }); }); });
+  (PROG.cycles||[]).forEach(function(cy){ if(!cy.archived && !cy.draft) (cy.days||[]).forEach(function(day){ (day.exercises||[]).forEach(function(e){ liveIds[e.id]=1; }); }); });
   var byName={};
   list.forEach(function(ex){
     var k=(flatDisplayName(ex.name,ex.id)||"").trim().toLowerCase();
