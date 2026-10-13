@@ -696,13 +696,14 @@ function renderProgramEditor(){
     dup.addEventListener("click",function(){
       var label=prompt("Name for the new cycle:", "Copy of "+(cy.label||""));
       if(!label)return;
+      var keepHist=confirm("Carry over each movement's logged history into the new cycle?\n\nOK = keep history (movements continue where they left off)\nCancel = start fresh (no past logs)");
       pushCoachHistory();
       var copy=JSON.parse(JSON.stringify(cy));
       copy.id="cy"+randToken(6); copy.label=label; copy.archived=false;
-      copy.days.forEach(function(d){ d.exercises.forEach(function(ex){ ex.id=newExId(d.id); ex.hl=false; }); });
+      if(!keepHist){ copy.days.forEach(function(d){ d.exercises.forEach(function(ex){ ex.id=newExId(d.id); if(ex.variants) ex.variants.forEach(function(v){ v.id=newExId(d.id); }); }); }); }
       prog.cycles.unshift(copy);
       saveProgramSoon(); renderProgramEditor();
-      toast("New cycle created. Its logs start fresh.");
+      toast(keepHist?"New cycle created. History carries over.":"New cycle created. Its logs start fresh.");
     });
     head.appendChild(dup);
     var delCy=el("button","btn small danger","Delete cycle"); delCy.type="button";
