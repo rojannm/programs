@@ -119,6 +119,10 @@ textarea{min-height:120px;resize:vertical}
 .bitem-name{flex:1}
 .bitem .x{border:0;background:none;color:var(--ink2);font-size:1.05rem;line-height:1;cursor:pointer;padding:0}
 .bhint{color:var(--ink2);font-size:.76rem;text-align:center;padding:10px 4px}
+.hx-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--hair-soft)}
+.hx-row .hx-name{font-weight:600;color:var(--ink);font-size:.9rem}
+.hx-row .hx-meta{color:var(--ink2);font-size:.76rem}
+.hx-row .btn{margin-left:auto;flex:0 0 auto}
 .dayhead{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
 .daycolor{display:inline-flex;align-items:center;gap:5px}
 .daycolor input[type=color]{width:32px;height:30px;padding:2px;border:1px solid var(--hair);border-radius:8px;background:var(--card);cursor:pointer}
@@ -1282,6 +1286,49 @@ function coachBodyReport(host){
   }
   host.appendChild(wrap); return true;
 }
+/* manual history linker: pull logged history from another id (handles renamed movements + orphans) */
+function nameOfId(id){
+  var nm=null;
+  (prog.cycles||[]).forEach(function(cy){ (cy.days||[]).forEach(function(day){ (day.exercises||[]).forEach(function(ex){ if(ex.id===id)nm=(ex.name||"")+(cy.archived?" ["+(cy.label||"old")+"]":""); (ex.variants||[]).forEach(function(v){ if(v.id===id)nm=(ex.name||"")+" · "+(v.name||""); }); }); }); });
+  (prog.archived_exercises||[]).forEach(function(ex){ if(ex.id===id)nm=(ex.name||"")+" [archived]"; });
+  return nm;
+}
+function firstDate(rows){ for(var i=0;i<rows.length;i++){ var d=(rows[i].cells&&rows[i].cells[0])||""; if(d&&d!=="-")return d; } return ""; }
+function mergeSpecific(targetEx, sourceId){
+  var src=logModel[sourceId]||[], existing=logModel[targetEx.id]||[], keys={};
+  existing.forEach(function(r){ keys[JSON.stringify(r.cells)]=1; });
+  var toAdd=src.filter(function(r){ var k=JSON.stringify(r.cells); if(keys[k])return false; keys[k]=1; return true; });
+  logModel[targetEx.id]=toAdd.concat(existing);
+  pushCoachRows(targetEx, logModel[targetEx.id]);
+  return toAdd.length;
+}
+function openHistoryPicker(targetEx){
+  var back=el("div","tagpick-back"); var box=el("div","tagpick"); box.style.width="min(600px,100%)";
+  box.appendChild(el("div","tagpick-h","Pull history into: "+((targetEx.name||"").replace(/^\d+\/\d+\s+/,""))));
+  box.appendChild(el("p","note","Pick where this movement's older logs live. Orphaned history (movement deleted) shows with its dates so you can recognise it."));
+  var srch=document.createElement("input"); srch.className="rail-srch"; srch.type="search"; srch.placeholder="Search by name, date or id…"; box.appendChild(srch);
+  var listHost=el("div"); listHost.style.cssText="max-height:52vh;overflow:auto"; box.appendChild(listHost);
+  function draw(){
+    listHost.textContent=""; var q=(srch.value||"").toLowerCase();
+    var items=Object.keys(logModel).filter(function(id){ return id!=="_notes" && id!==targetEx.id && (logModel[id]||[]).length; })
+      .map(function(id){ return {id:id,name:nameOfId(id),n:(logModel[id]||[]).length,d:firstDate(logModel[id]||[])}; });
+    items.sort(function(a,b){ return b.n-a.n; });
+    items.filter(function(it){ return !q || ((it.name||"orphan")+" "+it.id+" "+it.d).toLowerCase().indexOf(q)>=0; }).forEach(function(it){
+      var row=el("div","hx-row");
+      var left=el("div"); left.appendChild(el("div","hx-name", it.name||"(orphaned history — deleted movement)"));
+      left.appendChild(el("div","hx-meta", it.n+" sets · from "+(it.d||"?")+" · "+it.id)); row.appendChild(left);
+      var mb=el("button","btn small primary","Merge"); mb.type="button";
+      mb.addEventListener("click",function(){ var added=mergeSpecific(targetEx,it.id); close(); renderLogsBody(); toast("Merged "+added+" set"+(added===1?"":"s")+" from "+(it.name||"orphan")); });
+      row.appendChild(mb); listHost.appendChild(row);
+    });
+    if(!listHost.children.length) listHost.appendChild(el("p","note","No other history found."));
+  }
+  srch.addEventListener("input",draw); draw();
+  var cl=el("button","btn small","Close"); cl.type="button"; cl.style.marginTop="10px"; cl.addEventListener("click",function(){ close(); }); box.appendChild(cl);
+  function close(){ if(back.parentNode)back.parentNode.removeChild(back); }
+  back.addEventListener("click",function(e){ if(e.target===back)close(); });
+  back.appendChild(box); document.body.appendChild(back);
+}
 /* read-only diagnosis of where a client's logged history lives (uses already-loaded logModel) */
 function diagnoseHistory(){
   var inP={}, L=[]; function cnt(id){ return (logModel[id]||[]).length; }
@@ -1610,6 +1657,9 @@ function appendLogTable(block, ex, rows){
     else{ toast("Copy not supported"); }
   });
   actions.appendChild(cpy);
+  var hx=el("button","addrow","Pull history"); hx.type="button"; hx.title="Merge in logged history from a renamed movement or an orphaned record";
+  hx.addEventListener("click",function(){ openHistoryPicker(ex); });
+  actions.appendChild(hx);
   block.appendChild(actions);
   return block;
 }
