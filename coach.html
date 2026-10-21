@@ -1273,6 +1273,22 @@ function coachBodyReport(host){
   }
   host.appendChild(wrap); return true;
 }
+/* read-only diagnosis of where a client's logged history lives (uses already-loaded logModel) */
+function diagnoseHistory(){
+  var inP={}, L=[]; function cnt(id){ return (logModel[id]||[]).length; }
+  (prog.cycles||[]).forEach(function(cy){ L.push('CYCLE "'+(cy.label||'')+'"'+(cy.archived?' [archived]':'')+(cy.draft?' [draft]':'')); (cy.days||[]).forEach(function(d){ (d.exercises||[]).forEach(function(ex){ inP[ex.id]=1; L.push('  '+(ex.name||'?')+'  logs='+cnt(ex.id)+'  id='+ex.id); (ex.variants||[]).forEach(function(v){ inP[v.id]=1; L.push('    table "'+(v.name||'')+'"  logs='+cnt(v.id)+'  id='+v.id); }); }); }); });
+  (prog.archived_exercises||[]).forEach(function(ex){ inP[ex.id]=1; L.push('ARCHIVED-EX '+(ex.name||'?')+'  logs='+cnt(ex.id)+'  id='+ex.id); });
+  var orph=Object.keys(logModel).filter(function(id){ return id!=='_notes' && !inP[id] && (logModel[id]||[]).length; });
+  L.push(''); L.push('ORPHAN LOG IDS (history with no movement in the program): '+orph.length);
+  orph.forEach(function(id){ var r=logModel[id]||[]; var sd=(r[0]&&r[0].cells&&r[0].cells[0])||''; L.push('  id='+id+'  logs='+r.length+'  sample='+sd); });
+  var back=el("div","tagpick-back"); var box=el("div","tagpick"); box.style.width="min(680px,100%)";
+  box.appendChild(el("div","tagpick-h","History diagnosis — tap Copy, then paste to Claude"));
+  var ta=document.createElement("textarea"); ta.readOnly=true; ta.value=L.join('\n'); ta.style.cssText="width:100%;height:50vh;font:12px/1.4 ui-monospace,Menlo,monospace;border:1px solid var(--hair);border-radius:8px;padding:8px;background:var(--bg);color:var(--ink)"; box.appendChild(ta);
+  var cp=el("button","btn small primary","Copy"); cp.type="button"; cp.style.marginTop="8px"; cp.addEventListener("click",function(){ ta.focus(); ta.select(); var ok=false; try{ok=document.execCommand('copy');}catch(e){} try{navigator.clipboard.writeText(ta.value);ok=true;}catch(e){} toast(ok?"Copied":"Select the text and copy manually"); }); box.appendChild(cp);
+  var cl=el("button","btn small","Close"); cl.type="button"; cl.style.marginTop="8px"; cl.addEventListener("click",function(){ back.remove(); }); box.appendChild(cl);
+  back.addEventListener("click",function(e){ if(e.target===back)back.remove(); });
+  back.appendChild(box); document.body.appendChild(back);
+}
 /* merge a movement's logged history that ended up on an older copy (same name, different id) */
 function reconnectHistory(){
   if(!confirm("Find movements whose log history is sitting on an older copy (same name, different id) and merge it into the current movement?\n\nYour newer entries are kept, old history is added before them, and nothing is deleted.")) return;
@@ -1314,6 +1330,10 @@ function renderLogsBody(){
   rc.title="Merge in history that ended up on an older copy of a movement (same name, different id)";
   rc.addEventListener("click",reconnectHistory);
   bar.appendChild(rc);
+  var dg=el("button","btn small","Diagnose history"); dg.type="button";
+  dg.title="Show where this client's logged history lives (read-only)";
+  dg.addEventListener("click",diagnoseHistory);
+  bar.appendChild(dg);
   bar.appendChild(clr);
   var exp=el("button","btn small","Expand all"); exp.type="button";
   exp.addEventListener("click",function(){ host.querySelectorAll(".logday,.exblock").forEach(function(d){ d.open=true; }); });
