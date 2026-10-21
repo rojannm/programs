@@ -1188,10 +1188,19 @@ async function loadLogs(){
   await loadMeta();
   GRO.data=await fetchClientFlat(currentSlug); ensureSwapWeekCoach(); ensureSwapLogCoach();   /* client overlay: swaps show/edit here too */
   await fetchTagMap(); applyTagMapToClient();
-  var r=await fetch(url("/rest/v1/log_entries?client_slug=eq."+esc(currentSlug)+
-    "&select=*&order=exercise_id.asc,row_index.asc"),{headers:headers()});
-  if(!r.ok){ host.textContent="Could not load logs."; return; }
-  var data=await r.json();
+  /* page through ALL log rows — a client with lots of history can exceed one page (1000),
+     which used to silently drop everything sorted after it and leave movements "empty" */
+  var data=[], from=0, PAGE=1000;
+  while(true){
+    var r=await fetch(url("/rest/v1/log_entries?client_slug=eq."+esc(currentSlug)+
+      "&select=*&order=exercise_id.asc,row_index.asc"),{headers:headers({"Range-Unit":"items","Range":from+"-"+(from+PAGE-1)})});
+    if(!r.ok){ if(from===0){ host.textContent="Could not load logs."; return; } break; }
+    var chunk=await r.json();
+    data=data.concat(chunk);
+    if(chunk.length<PAGE) break;
+    from+=PAGE;
+    if(from>200000) break;   /* safety cap */
+  }
   logModel={};
   var notesText="";
   data.forEach(function(e){
