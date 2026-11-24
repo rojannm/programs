@@ -504,6 +504,21 @@ function sbHeaders(extra){
   return h;
 }
 function sbUrl(p){ return CONFIG.supabaseUrl.replace(/\/$/,"")+p; }
+/* page through ALL rows — Supabase caps a single response (default 1000), which used to
+   silently drop everything past the cap and leave movements/sessions looking empty */
+async function sbFetchAll(path){
+  var out=[], from=0, PAGE=1000;
+  while(true){
+    var r=await fetch(sbUrl(path),{headers:sbHeaders({"Range-Unit":"items","Range":from+"-"+(from+PAGE-1)})});
+    if(!r.ok){ if(from===0) throw new Error("fetch "+r.status); break; }
+    var chunk=await r.json();
+    out=out.concat(chunk);
+    if(chunk.length<PAGE) break;
+    from+=PAGE;
+    if(from>500000) break;
+  }
+  return out;
+}
 var pill=document.getElementById("syncpill");
 function setPill(state){
   if(state==="synced"){ pill.textContent="Synced with Rojan"; pill.className="ok"; }
@@ -591,9 +606,8 @@ var SESS={byDate:{}, doneToday:{}, lastDone:{}};
 async function pullSessions(){
   if(!cloudEnabled()) return;
   try{
-    var r=await fetch(sbUrl("/rest/v1/session_log?client_slug=eq."+encodeURIComponent(SLUG)+"&select=*&order=log_date.desc"),{headers:sbHeaders()});
-    if(!r.ok) return;
-    var data=await r.json(); SESS={byDate:{},doneToday:{},lastDone:{}};
+    var data=await sbFetchAll("/rest/v1/session_log?client_slug=eq."+encodeURIComponent(SLUG)+"&select=*&order=log_date.desc");
+    SESS={byDate:{},doneToday:{},lastDone:{}};
     var wk=weekStartIso();
     data.forEach(function(e){
       (SESS.byDate[e.log_date]=SESS.byDate[e.log_date]||[]).push({id:e.exercise_id,name:e.exercise_name});
@@ -689,10 +703,8 @@ function saveMeta(exId){
   },500);
 }
 async function pullLogs(){
-  var r=await fetch(sbUrl("/rest/v1/log_entries?client_slug=eq."+encodeURIComponent(SLUG)+
-    "&select=*&order=exercise_id.asc,row_index.asc"),{headers:sbHeaders()});
-  if(!r.ok) throw new Error("logs "+r.status);
-  var data=await r.json();
+  var data=await sbFetchAll("/rest/v1/log_entries?client_slug=eq."+encodeURIComponent(SLUG)+
+    "&select=*&order=exercise_id.asc,row_index.asc");
   var byEx={};
   data.forEach(function(e){ (byEx[e.exercise_id]=byEx[e.exercise_id]||[]).push(e); });
   store.rowBy=store.rowBy||{};
