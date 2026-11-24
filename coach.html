@@ -1329,6 +1329,51 @@ function openHistoryPicker(targetEx){
   back.addEventListener("click",function(e){ if(e.target===back)close(); });
   back.appendChild(box); document.body.appendChild(back);
 }
+/* suggest where each empty/under-full movement's history likely lives, by fuzzy name match */
+function histTokset(name){
+  var n=(""+(name||"")).replace(/^\d+\/\d+\s+/,"").toLowerCase().replace(/[^a-z0-9\s]/g," ").replace(/\s+/g," ").trim();
+  var FILL={the:1,a:1,an:1,and:1,with:1,to:1,for:1,of:1,on:1,in:1,or:1,"1":1,"2":1,"3":1,avoid:1,rn:1,copy:1,info:1,now:1};
+  return n.split(" ").filter(function(w){ return w && !FILL[w] && w.length>1; }).map(function(w){ return w.replace(/s$/,""); });
+}
+function histScore(tt,ct){ if(!tt.length||!ct.length)return 0; var cs={}; ct.forEach(function(t){cs[t]=1;}); var shared=tt.filter(function(t){return cs[t];}).length; if(shared<2)return 0; if(shared===tt.length)return 1; return shared/Math.max(tt.length,ct.length); }
+function openSuggestMatches(){
+  var targets=[], seen={};
+  (prog.cycles||[]).forEach(function(cy){ if(cy.archived||cy.draft)return; (cy.days||[]).forEach(function(day){ (day.exercises||[]).forEach(function(ex){ if(!ex.name||seen[ex.id])return; seen[ex.id]=1; targets.push(ex); }); }); });
+  var pool=Object.keys(logModel).filter(function(id){ return id!=="_notes" && (logModel[id]||[]).length; })
+    .map(function(id){ var nm=nameOfId(id)||""; return {id:id,name:nm,toks:histTokset(nm),n:(logModel[id]||[]).length,d:firstDate(logModel[id]||[])}; });
+  var sugg=[];
+  targets.forEach(function(ex){
+    var own=(logModel[ex.id]||[]).length, tt=histTokset(ex.name), best=null;
+    pool.forEach(function(c){ if(c.id===ex.id)return; var sc=histScore(tt,c.toks); if(!sc)return; if(!best||sc>best.sc||(sc===best.sc&&c.n>best.n)) best={sc:sc,id:c.id,name:c.name,n:c.n,d:c.d}; });
+    if(!best)return;
+    if(own>0 && best.n-own<3) return;   /* already has most of it */
+    sugg.push({ex:ex,own:own,best:best,on:best.sc>=0.6});
+  });
+  var back=el("div","tagpick-back"); var box=el("div","tagpick"); box.style.width="min(680px,100%)";
+  box.appendChild(el("div","tagpick-h","Suggested history matches"));
+  if(!sugg.length){ box.appendChild(el("p","note","No likely matches. Empty movements are probably just new (never logged).")); }
+  else box.appendChild(el("p","note","Each empty or under-full movement matched to where its history likely lives. Strong matches are pre-checked, weaker ones say 'maybe' and are left for you to decide. Review and Apply. Nothing is deleted."));
+  var listHost=el("div"); listHost.style.cssText="max-height:52vh;overflow:auto"; box.appendChild(listHost);
+  sugg.forEach(function(s){
+    var row=el("label","hx-row");
+    var cb=document.createElement("input"); cb.type="checkbox"; cb.checked=s.on; s.cb=cb; row.appendChild(cb);
+    var mid=el("div"); mid.style.flex="1";
+    mid.appendChild(el("div","hx-name",(s.ex.name||"").replace(/^\d+\/\d+\s+/,"")+(s.own?(" ("+s.own+" now)"):" (empty)")));
+    mid.appendChild(el("div","hx-meta","← "+(s.best.name||"orphan")+"   ·  +"+s.best.n+" sets from "+(s.best.d||"?")+"   ·  "+(s.best.sc>=0.6?"strong":"maybe")));
+    row.appendChild(mid);
+    var pick=el("button","btn small","Change"); pick.type="button"; pick.addEventListener("click",function(e){ e.preventDefault(); e.stopPropagation(); back.remove(); openHistoryPicker(s.ex); });
+    row.appendChild(pick);
+    listHost.appendChild(row);
+  });
+  if(sugg.length){
+    var apply=el("button","btn small primary","Apply checked"); apply.type="button"; apply.style.marginTop="10px";
+    apply.addEventListener("click",function(){ var n=0,added=0; sugg.forEach(function(s){ if(s.cb&&s.cb.checked){ added+=mergeSpecific(s.ex,s.best.id); n++; } }); back.remove(); renderLogsBody(); toast(n?("Merged into "+n+" movement"+(n===1?"":"s")+" ("+added+" sets)"):"Nothing checked"); });
+    box.appendChild(apply);
+  }
+  var cl=el("button","btn small","Close"); cl.type="button"; cl.style.cssText="margin-top:10px;margin-left:6px"; cl.addEventListener("click",function(){ back.remove(); }); box.appendChild(cl);
+  back.addEventListener("click",function(e){ if(e.target===back)back.remove(); });
+  back.appendChild(box); document.body.appendChild(back);
+}
 /* read-only diagnosis of where a client's logged history lives (uses already-loaded logModel) */
 function diagnoseHistory(){
   var inP={}, L=[]; function cnt(id){ return (logModel[id]||[]).length; }
@@ -1382,6 +1427,10 @@ function renderLogsBody(){
     host.querySelectorAll(".exblock.revisit").forEach(function(b){ b.classList.remove("revisit"); });
     toast(any?"Flags cleared":"No flags");
   });
+  var sg=el("button","btn small","Suggest history matches"); sg.type="button";
+  sg.title="Find where each empty movement's history likely lives and accept them in one go";
+  sg.addEventListener("click",openSuggestMatches);
+  bar.appendChild(sg);
   var rc=el("button","btn small","Reconnect past history"); rc.type="button";
   rc.title="Merge in history that ended up on an older copy of a movement (same name, different id)";
   rc.addEventListener("click",reconnectHistory);
